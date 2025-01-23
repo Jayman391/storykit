@@ -93,10 +93,10 @@ num_documents = html.Div(
         dcc.Input(
             id="num-documents",
             type="number",
-            placeholder=50,
+            placeholder=10,
             min=1,
             step=1,
-            value=50,  # Default value
+            value=10,  # Default value
             style={"width": "100%"},
         ),
     ],
@@ -120,29 +120,7 @@ post_or_comment_checkbox = html.Div(
     className="mb-3",
 )
 
-# Query table using dash_table.DataTable for proper data handling
-query_table = html.Div(
-    [   
-        dbc.Label("Query Results", html_for="query-table"),
-        dash_table.DataTable(
-            id='query-table',
-            columns=[],  # Will be populated dynamically
-            data=[],     # Will be populated via callback
-            page_size=10,  # Adjust as needed
-            style_table={'overflowX': 'auto'},
-            style_cell={
-                'textAlign': 'left',
-                'minWidth': '100px', 'width': '150px', 'maxWidth': '180px',
-                'whiteSpace': 'normal'
-            },
-            style_header={
-                'backgroundColor': 'rgb(230, 230, 230)',
-                'fontWeight': 'bold'
-            },
-        ),
-    ],
-    style={"margin-top": "20px"},
-)
+
 
 # Organize the sliders into rows with appropriate column widths using dbc.Row and dbc.Col
 form = dbc.Container(
@@ -183,7 +161,6 @@ form = dbc.Container(
                 ),
             ]
         ),
-        query_table,
     ],
     style={
         'margin-top': '20px',

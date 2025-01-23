@@ -7,7 +7,7 @@ def compute_ngrams(data: list, params: dict) -> dict:
     dates = {}
     full_corpus = {}
 
-    ngrams = params["keywords"]
+    ngrams = params.get("keywords", [])
     ns = [1]
     for ngram in ngrams:
         length = len(ngram.split())
@@ -25,14 +25,14 @@ def compute_ngrams(data: list, params: dict) -> dict:
 
     for doc in data:
         # Ensure date is a datetime object
-        try :
+        try:
             if isinstance(doc["date"], str):
-                date_obj = datetime.strptime(doc["date"], '%d-%m-%y')
+                date_obj = datetime.strptime(doc["date"], '%Y-%m-%dT%H:%M:%S')
             else:
                 date_obj = doc["date"]
             date_str = date_obj.strftime('%a, %d %b %Y %H:%M:%S')
-
-        except Exception:
+        except Exception as e:
+            print(f"Date parsing error: {e}")
             continue
 
         if date_str not in dates:
@@ -41,7 +41,7 @@ def compute_ngrams(data: list, params: dict) -> dict:
                 dates[date_str][f'{n}-gram'] = Counter()
 
         # Combine 'text' and 'title' if 'title' exists
-        text = doc["text"]
+        text = doc.get("text", "")
         if 'title' in doc and doc['title']:
             text += ' ' + doc['title']
         text = text.lower()

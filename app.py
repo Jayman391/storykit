@@ -6,12 +6,16 @@ from dash import Dash, html, dash_table, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import plotly.express as px
+from flask_caching import Cache
 from babycenterdb.results import Results
 
 from frontend.query import form
 from backend.query import build_query
-from frontend.wordshift import wordshift
+
 from frontend.ngram import ngram
+from backend.ngram import compute_ngrams
+
+from frontend.wordshift import wordshift
 from frontend.chatbot import chatbot
 # Initialize the app
 
@@ -19,14 +23,21 @@ app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP]
 )
 
-# create global variable for query data
-query_data = pd.DataFrame()
-
 app.layout = html.Div([
+    dcc.Store(id='raw-docs',storage_type='session'),
+    dcc.Store(id='ngram-data',storage_type='session'),
     form,
-    ngram,      # Ensure 'ngram' is correctly defined/imported
-    wordshift,  # Ensure 'wordshift' is correctly defined/imported
-    chatbot,    # Ensure 'chatbot' is correctly defined/imported
+    dbc.Accordion([
+        dbc.AccordionItem([
+            ngram,      
+        ], title="Ngram Analysis",),
+        dbc.AccordionItem([
+            wordshift,  
+        ], title="Sentiment Analysis",),
+        dbc.AccordionItem([
+            chatbot,  
+        ], title="RAG",),
+    ]),
 ])
 
 # Callback to control visibility of comment slider and time delta slider
@@ -50,11 +61,10 @@ def toggle_sliders(post_or_comment_value):
 
     return time_delta_style, comments_style
 
+
 # Callback to generate query and update the query table
 @app.callback(
-    Output("query-table", "data"),
-    Output("query-table", "columns"),
-    [
+        Output("raw-docs", "data"),
         Input("date-range", "start_date"),
         Input("date-range", "end_date"),
         Input("doc-comments-range-slider", "value"),
@@ -62,7 +72,6 @@ def toggle_sliders(post_or_comment_value):
         Input("text-input", "value"),
         Input("group-input", "value"),
         Input("post-or-comment", "value")
-    ]
 )
 def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment):
     """
@@ -79,14 +88,31 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'post_or_comment': post_or_comment
     }
 
-    # Execute the query (assuming build_query returns a pandas DataFrame)
     results = build_query(params)
 
-    query_data = results
+    return results.sample(200).to_dict('records')
+    
+# read in the data from raw-docs
+@app.callback(
+    Output("ngram-data", "data"),
+    Input("raw-docs", "data")
+)
+def update_ngram_table(data):
+    """
+    Update the ngram table with the query results.
+    """
+    if data is None:
+        return []
+    else:
 
-    return results.sample(200).to_dict('records'), [{"name": i, "id": i} for i in results.columns]
+        df = pd.DataFrame.from_records(data)[['text', 'date']]
+ 
+        records = df.to_dict('records')
 
-# Ensure all components are correctly defined/imported before running the server
+        ngrams = compute_ngrams(records, {'keywords': ['all']})
+ 
+        return ngrams
+
 
 if __name__ == "__main__":
     app.run_server(debug=True)
