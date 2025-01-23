@@ -30,6 +30,9 @@ def build_query(params : dict) -> pd.DataFrame:
     post_filters.append(babycenterdb.filter.GroupFilter(value_list=params['groups'].split(',')))
     comment_filters.append(babycenterdb.filter.GroupFilter(value_list=params['groups'].split(',')))
 
+  post_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
+  comment_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
+
   posts_query = Query('posts', post_filters, output_format="df").execute()
   comments_query = Query('comments', comment_filters, output_format="df").execute()
 
