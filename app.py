@@ -1,4 +1,3 @@
-# Import packages
 import numpy as np
 import pandas as pd
 import dash
@@ -6,27 +5,57 @@ from dash import Dash, html, dash_table, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import plotly.express as px
+from flask_caching import Cache
+
+import matplotlib      # pip install matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
+
+import json
+from io import BytesIO
+import base64
+
+from collections import defaultdict
+import shifterator as sh
+
 from babycenterdb.results import Results
 
 from frontend.query import form
 from backend.query import build_query
-from frontend.wordshift import wordshift
-from frontend.ngram import ngram
-from frontend.chatbot import chatbot
-# Initialize the app
 
+from frontend.ngram import ngram
+from backend.ngram import compute_ngrams
+
+from frontend.sentiment import wordshift
+from backend.sentiment import make_daily_wordshifts_and_sentiments
+
+from frontend.chatbot import chatbot
+
+# Initialize the app
 app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP]
 )
 
-# create global variable for query data
-query_data = pd.DataFrame()
-
 app.layout = html.Div([
+    dcc.Store(id='raw-docs', storage_type='session'),
+    dcc.Store(id='ngram-data', storage_type='session'),
+    dcc.Store(id='sentiments-data', storage_type='session'),
     form,
-    ngram,      # Ensure 'ngram' is correctly defined/imported
-    wordshift,  # Ensure 'wordshift' is correctly defined/imported
-    chatbot,    # Ensure 'chatbot' is correctly defined/imported
+    dbc.Accordion([
+        dbc.AccordionItem([
+            ngram,      
+        ], title="Ngram Analysis",),
+        dbc.AccordionItem([
+            wordshift,  
+        ], title="Sentiment Analysis",),
+        dbc.AccordionItem([
+            chatbot,  
+        ], title="RAG",),
+    ]),
+    # Ensure that the image component is part of the layout
+    html.Div([
+        html.Img(id='wordshift-graph', style={'width': '100%'})
+    ])
 ])
 
 # Callback to control visibility of comment slider and time delta slider
@@ -50,10 +79,10 @@ def toggle_sliders(post_or_comment_value):
 
     return time_delta_style, comments_style
 
+
 # Callback to generate query and update the query table
 @app.callback(
-    Output("query-table", "data"),
-    Output("query-table", "columns"),
+    Output("raw-docs", "data"),
     [
         Input("date-range", "start_date"),
         Input("date-range", "end_date"),
@@ -79,14 +108,77 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'post_or_comment': post_or_comment
     }
 
-    # Execute the query (assuming build_query returns a pandas DataFrame)
     results = build_query(params)
 
-    query_data = results
+    return results.sample(200).to_dict('records')
+    
+# Callback to update the ngram table
+@app.callback(
+    Output("ngram-data", "data"),
+    Input("raw-docs", "data")
+)
+def update_ngram_table(data):
+    """
+    Update the ngram table with the query results.
+    """
+    if data is None:
+        return {}
+    else:
+        df = pd.DataFrame.from_records(data)[['text', 'date']]
+        records = df.to_dict('records')
+        ngrams = compute_ngrams(records, {'keywords': ['all']})
+        return ngrams
 
-    return results.sample(200).to_dict('records'), [{"name": i, "id": i} for i in results.columns]
+# Callback to store sentiments separately
+@app.callback(
+    Output("sentiments-data", "data"),
+    Input("ngram-data", "data")
+)
+def update_sentiments(data):
+    """
+    Compute and store sentiments based on ngram data.
+    """
+    if not data:
+        return {}
+    else:
+        sentiments, _ = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+        return sentiments
 
-# Ensure all components are correctly defined/imported before running the server
+
+# Callback to generate and display the wordshift graph image
+@app.callback(
+    Output("wordshift-graph", "src"),
+    Input("ngram-data", "data")
+)
+def update_wordshift_graph(data):
+    """
+    Generate the wordshift graph image and update the 'src' of the image component.
+    """
+    if not data:
+        return ""
+    else:
+        try:
+            sentiments, shifts = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+
+            if not shifts:
+                return ""
+
+            # For demonstration, we'll display the first shift image
+            shift = shifts[0]
+            shift.plot()  # Let shift.plot() create its own figure
+            fig = plt.gcf()  # Get current figure
+            fig.tight_layout()  # Ensure layout is tight to prevent overlaps
+
+            buf = BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            encoded = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)  # Close the figure to free memory
+
+            return f"data:image/png;base64,{encoded}"
+        except Exception as e:
+            print(f"Error generating wordshift graph: {e}")
+            return ""
 
 if __name__ == "__main__":
     app.run_server(debug=True)
