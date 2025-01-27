@@ -27,7 +27,7 @@ from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
 from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_wordshifts_and_sentiments
+from backend.sentiment import make_daily_sentiments, make_daily_wordshifts 
 
 from frontend.chatbot import chatbot
 
@@ -52,10 +52,6 @@ app.layout = html.Div([
             chatbot,  
         ], title="RAG",),
     ]),
-    # Ensure that the image component is part of the layout
-    html.Div([
-        html.Img(id='wordshift-graph', style={'width': '100%'})
-    ])
 ])
 
 # Callback to control visibility of comment slider and time delta slider
@@ -141,7 +137,7 @@ def update_sentiments(data):
     if not data:
         return {}
     else:
-        sentiments, _ = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+        sentiments = make_daily_sentiments(data.get('dates', {}))
         return sentiments
 
 
@@ -158,7 +154,7 @@ def update_wordshift_graph(data):
         return ""
     else:
         try:
-            sentiments, shifts = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+            shifts = make_daily_wordshifts(data.get('dates', {}))
 
             if not shifts:
                 return ""
