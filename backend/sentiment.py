@@ -12,52 +12,69 @@ labmt = labmt[['Word', 'Happiness Score']]
 labmt_dict = labmt.set_index('Word')['Happiness Score']
 labmt_words = labmt_dict.index.to_numpy()
 
-def make_daily_sentiments(days: dict) -> dict:
-    sentiments = {}
+
+def compute_single_day_sentiment(args):
+    """
+    Helper function to compute sentiment for a single day.
+    Unpacked arguments:
+      day_id: the key (ID) for the day
+      day_data: the dictionary that holds 1-gram counts
+      labmt_words: NumPy array of valid words (from the labMT dictionary)
+      labmt_dict: Pandas Series for quick lookups of happiness scores
+    """
+    day_id, day_data, labmt_words, labmt_dict = args
     
-    # Convert labmt_dict index to a NumPy array for faster operations
+    # Extract '1-gram' counts; default to empty dict if not present
+    day_words_dict = day_data.get('1-gram', {}).get('counts', {})
+    if not day_words_dict:
+        return day_id, None  # Skip if no words for the day
     
-    for day_id, day_data in days.items():
-        # Extract '1-gram' counts; default to empty dict if not present
-        day_words_dict = day_data.get('1-gram', {}).get('counts', {})
-        
-        if not day_words_dict:
-            continue  # Skip if no words for the day
-        
-        # Convert day_words_dict to two separate NumPy arrays
-        words, counts = zip(*day_words_dict.items())
-        words = np.array(words)
-        counts = np.array(counts, dtype=np.float64)  # Ensure counts are float for division
-        
-        # Create a mask for words present in labmt_dict using NumPy's isin for speed
-        mask = np.isin(words, labmt_words)
-        
-        if not np.any(mask):
-            continue  # Skip if no relevant words
-        
-        # Filter words and counts based on the mask
-        valid_words = words[mask]
-        valid_counts = counts[mask]
-        
-        # Retrieve corresponding happiness scores using Pandas' indexing
-        valid_scores = labmt_dict.loc[valid_words].to_numpy()
-        
-        # Calculate total counts to normalize
-        total_counts = valid_counts.sum()
-        
-        if total_counts == 0:
-            continue  # Avoid division by zero
-        
-        # Compute sentiment: (count / total_counts) * happiness_score
-        sentiments_array = (valid_counts / total_counts) * valid_scores
-        
-        # Sum the sentiments to get the total sentiment for the day
-        total_day_sentiment = sentiments_array.sum()
-        
-        # Assign to the sentiments dictionary
-        sentiments[day_id] = total_day_sentiment
+    # Convert day_words_dict to two separate NumPy arrays
+    words, counts = zip(*day_words_dict.items())
+    words = np.array(words, dtype=object)
+    counts = np.array(counts, dtype=np.float64)  # Ensure float for division
     
-    return sentiments
+    # Create a mask for words present in labmt_dict
+    mask = np.isin(words, labmt_words)
+    if not np.any(mask):
+        return day_id, None
+    
+    # Filter words and counts
+    valid_words = words[mask]
+    valid_counts = counts[mask]
+    
+    # Retrieve corresponding happiness scores using Pandas' indexing
+    valid_scores = labmt_dict.loc[valid_words].to_numpy()
+    
+    # Calculate total counts to normalize
+    total_counts = valid_counts.sum()
+    if total_counts == 0:
+        return day_id, None
+    
+    # Compute sentiment: (count / total_counts) * happiness_score
+    sentiments_array = (valid_counts / total_counts) * valid_scores
+    total_day_sentiment = sentiments_array.sum()
+    
+    return day_id, total_day_sentiment
+
+def make_daily_sentiments_parallel(days: dict) -> dict:
+    """
+    A parallelized version of make_daily_sentiments. Returns a dictionary
+    of {day_id: sentiment}.
+    """
+    labmt_words = labmt_dict.index.to_numpy()
+    
+    # Prepare arguments for each day
+    tasks = [(day_id, day_data, labmt_words, labmt_dict)
+             for day_id, day_data in days.items()]
+    
+    results_dict = {}
+    with Pool(processes=cpu_count()) as pool:
+        for day_id, sentiment in pool.map(compute_single_day_sentiment, tasks):
+            if sentiment is not None:
+                results_dict[day_id] = sentiment
+    
+    return results_dict
 
 def compute_shift(args):
     day, day_words, window_words, total_day_sentiment = args

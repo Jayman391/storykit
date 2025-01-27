@@ -27,7 +27,7 @@ from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
 from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_sentiments, make_daily_wordshifts_parallel
+from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
 
@@ -139,7 +139,7 @@ def update_sentiments(data):
     if not data:
         return {}
     else:
-        sentiments = make_daily_sentiments(data.get('dates', {}))
+        sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
         return sentiments
 
 
