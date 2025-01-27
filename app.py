@@ -27,7 +27,7 @@ from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
 from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_sentiments, make_daily_wordshifts 
+from backend.sentiment import make_daily_sentiments, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
 
@@ -86,10 +86,11 @@ def toggle_sliders(post_or_comment_value):
         Input("time-delta-slider", "value"),
         Input("text-input", "value"),
         Input("group-input", "value"),
-        Input("post-or-comment", "value")
+        Input("post-or-comment", "value"),
+        Input("num-documents", "value")
     ]
 )
-def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment):
+def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment, num_documents):
     """
     Generate query results based on form inputs and update the query table.
     """
@@ -101,12 +102,13 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'time_delta': time_delta,
         'ngram_keywords': ngram_keywords,
         'groups': groups,
-        'post_or_comment': post_or_comment
+        'post_or_comment': post_or_comment,
+        'num-documents': num_documents
     }
 
     results = build_query(params)
 
-    return results.sample(200).to_dict('records')
+    return results.to_dict('records')
     
 # Callback to update the ngram table
 @app.callback(
@@ -154,7 +156,7 @@ def update_wordshift_graph(data):
         return ""
     else:
         try:
-            shifts = make_daily_wordshifts(data.get('dates', {}))
+            shifts = make_daily_wordshifts_parallel(data.get('dates', {}))
 
             if not shifts:
                 return ""
