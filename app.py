@@ -34,6 +34,9 @@ from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshi
 from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
+from frontend.topic import topic
+from backend.topic import fit_topic_model, make_visualizations
+
 # Initialize the app
 app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP]
@@ -68,6 +71,10 @@ app.layout = html.Div([
                         children=chatbot,  
                         title="RAG",
                     ),
+                    dbc.AccordionItem(
+                        children=topic,
+                        title="Topic Modeling",
+                    ),
                 ], start_collapsed=True),
             ),
         ]),
@@ -95,8 +102,6 @@ def toggle_sliders(post_or_comment_value):
     return time_delta_style, comments_style
 
 
-## 5. Refactor the query callback to use the Submit button
-# -------------------------------------------------------
 @app.callback(
     Output("raw-docs", "data"),
     Input("submit-query-button", "n_clicks"),
@@ -262,6 +267,23 @@ def update_rag_response(n_clicks, question):
             return dbc.Alert(f"Error processing your request: {str(e)}", color="danger")
     
     return ""
+
+@app.callback(
+    Output("topic-graph", "figure"),
+    Input("raw-docs", "data")
+)
+def topic_model(data):
+    """
+    Fit a topic model and return the visualization.
+    """
+    if not data:
+        return {}
+
+    docs = pd.DataFrame.from_records(data)['text'].tolist()
+    topic_model, _, _ = fit_topic_model(docs)
+    fig = make_visualizations(topic_model, docs)
+
+    return fig
 
 if __name__ == "__main__":
     app.run_server(debug=True)
