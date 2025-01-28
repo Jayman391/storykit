@@ -1,26 +1,15 @@
+# app.py
+
 import numpy as np
 import pandas as pd
 import dash
 from dash import Dash, html, dash_table, dcc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 from flask_caching import Cache
 
-import matplotlib      # pip install matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-
-import json
-from io import BytesIO
-import base64
-
-from collections import defaultdict
-import shifterator as sh
-
-from flask_caching import Cache
-
-import matplotlib      # pip install matplotlib
+import matplotlib  # pip install matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
@@ -36,7 +25,6 @@ from babycenterdb.results import Results
 from frontend.query import form
 from backend.query import build_query
 
-
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
@@ -44,30 +32,46 @@ from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
-
+from backend.chatbot import initialize_global_rag, compute_rag
 
 # Initialize the app
 app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP]
 )
 
+# Initialize raw_docs as an empty DataFrame
+raw_docs = pd.DataFrame()
+
 app.layout = html.Div([
+    # Store components for managing session data
     dcc.Store(id='raw-docs', storage_type='session'),
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
-    form,
-    dbc.Accordion([
-        dbc.AccordionItem([
-            ngram,      
-        ], title="Ngram Analysis",),
-        dbc.AccordionItem([
-            wordshift,  
-        ], title="Sentiment Analysis",),
-        dbc.AccordionItem([
-            chatbot,  
-        ], title="RAG",),
-    ]),
-])
+    # Removed 'rag-llm' store as RAG is managed server-side
+
+    # Main container for the layout
+ 
+        # Optional: Add a row for the form if needed
+        dbc.Row([
+            dbc.Col(form),  # Adjust the width as necessary
+            dbc.Col(
+                dbc.Accordion([
+                    dbc.AccordionItem(
+                        children=ngram,      
+                        title="Ngram Analysis",
+                    ),
+                    dbc.AccordionItem(
+                        children=wordshift,  
+                        title="Sentiment Analysis",
+                    ),
+                    dbc.AccordionItem(
+                        children=chatbot,  
+                        title="RAG",
+                    ),
+                ], start_collapsed=True),
+            ),
+        ]),
+])  # Use fluid=True for a full-width container
 
 # Callback to control visibility of comment slider and time delta slider
 @app.callback(
@@ -91,24 +95,33 @@ def toggle_sliders(post_or_comment_value):
     return time_delta_style, comments_style
 
 
-# Callback to generate query and update the query table
+## 5. Refactor the query callback to use the Submit button
+# -------------------------------------------------------
 @app.callback(
     Output("raw-docs", "data"),
-    [
-        Input("date-range", "start_date"),
-        Input("date-range", "end_date"),
-        Input("doc-comments-range-slider", "value"),
-        Input("time-delta-slider", "value"),
-        Input("text-input", "value"),
-        Input("group-input", "value"),
-        Input("post-or-comment", "value"),
-        Input("num-documents", "value")
-    ]
+    Input("submit-query-button", "n_clicks"),
+    State("date-range", "start_date"),
+    State("date-range", "end_date"),
+    State("doc-comments-range-slider", "value"),
+    State("time-delta-slider", "value"),
+    State("text-input", "value"),
+    State("group-input", "value"),
+    State("post-or-comment", "value"),
+    State("num-documents", "value"),
 )
-def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment, num_documents):
+def generate_query(n_clicks,
+                   start_date, end_date,
+                   comments_range, time_delta,
+                   ngram_keywords, groups,
+                   post_or_comment, num_documents):
     """
-    Generate query results based on form inputs and update the query table.
+    Generate query results based on form inputs, but only when the user
+    clicks the "Submit Query" button.
     """
+    # If the button hasn't been clicked yet, do nothing
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+
     # Build the query parameters
     params = {
         'start_date': start_date,
@@ -118,13 +131,21 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'ngram_keywords': ngram_keywords,
         'groups': groups,
         'post_or_comment': post_or_comment,
-        'num-documents': num_documents
+        'num_documents': num_documents
     }
 
+    # Build and run the query
     results = build_query(params)
 
+    # Convert results to a dataframe if needed; or directly
+    raw_docs_updated = results 
+
+    # Initialize or update the RAG pipeline with new documents
+    initialize_global_rag(raw_docs_updated['text'].tolist())
+
     return results.to_dict('records')
-    
+
+
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
@@ -141,6 +162,7 @@ def update_ngram_table(data):
         records = df.to_dict('records')
         ngrams = compute_ngrams(records, {'keywords': ['all']})
         return ngrams
+
 
 # Callback to store sentiments separately
 @app.callback(
@@ -192,6 +214,54 @@ def update_wordshift_graph(data):
         except Exception as e:
             print(f"Error generating wordshift graph: {e}")
             return ""
+
+
+@app.callback(
+    Output("rag-response", "children"),
+    [Input("submit-val", "n_clicks")],
+    [State("question", "value")]
+)
+def update_rag_response(n_clicks, question):
+    if not question:
+        return dbc.Alert("Please ask a question.", color="warning")
+    
+    if n_clicks and n_clicks > 0:
+        try:
+            rag_response = compute_rag(question)  # This returns a dict with 'answer' and 'context'
+            answer = rag_response.get('answer', "No answer found.")
+            context = rag_response.get('context', [])
+
+            # Format the answer
+            answer_component = html.Div([
+                html.H4("Answer"),
+                html.P(answer)
+            ], style={'marginBottom': '20px'})
+
+            # Format the context
+            if context:
+                context_components = [
+                    html.Li(f"Context {i+1}: {ctx}") for i, ctx in enumerate(context)
+                ]
+                context_component = html.Div([
+                    html.H4("Context"),
+                    html.Ul(context_components)
+                ])
+            else:
+                context_component = html.Div([
+                    html.H4("Context"),
+                    html.P("No context available.")
+                ])
+
+            return html.Div([
+                answer_component,
+                context_component
+            ])
+
+        except Exception as e:
+            # Log the error as needed
+            return dbc.Alert(f"Error processing your request: {str(e)}", color="danger")
+    
+    return ""
 
 if __name__ == "__main__":
     app.run_server(debug=True)
