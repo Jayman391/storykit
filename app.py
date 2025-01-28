@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import dash
 from dash import Dash, html, dash_table, dcc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.express as px
 from flask_caching import Cache
@@ -36,7 +36,6 @@ from babycenterdb.results import Results
 from frontend.query import form
 from backend.query import build_query
 
-
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
@@ -44,7 +43,7 @@ from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
-
+from backend.chatbot import initialize_rag, compile_rag, compute_rag
 
 # Initialize the app
 app = dash.Dash(
@@ -55,6 +54,7 @@ app.layout = html.Div([
     dcc.Store(id='raw-docs', storage_type='session'),
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
+    dcc.Store(id='rag-llm', storage_type='session'),
     form,
     dbc.Accordion([
         dbc.AccordionItem([
@@ -192,6 +192,42 @@ def update_wordshift_graph(data):
         except Exception as e:
             print(f"Error generating wordshift graph: {e}")
             return ""
+
+@app.callback(
+    Output("rag-llm", "data"),
+    Input("raw-docs", "data"),
+)
+def initialize_and_compile_rag(data):
+    docs = pd.DataFrame.from_records(data)[['text']]
+    llm, vector_store, prompt = initialize_rag(docs)
+    return compile_rag()
+
+
+#callback to update question value on button click
+@app.callback(
+    Output("question", "value"),
+    [Input("submit-val", "n_clicks")],
+    [State("question", "value")]
+)
+def update_question(n_clicks, question):
+    if n_clicks != 0:
+        return question
+    return ""
+
+
+@app.callback(
+    Output("rag-response", "children"),
+    [Input("submit-val", "n_clicks"),
+     Input("question", "value")
+    ],
+    [State("rag-llm", "data")],
+    
+)
+def update_rag_response(submit_val, question, rag_llm):
+    if not question:
+        return "Please ask a question."
+    if submit_val != 0:
+        return compute_rag(rag_llm, question)
 
 if __name__ == "__main__":
     app.run_server(debug=True)
