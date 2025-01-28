@@ -18,10 +18,24 @@ import base64
 from collections import defaultdict
 import shifterator as sh
 
+from flask_caching import Cache
+
+import matplotlib      # pip install matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
+
+import json
+from io import BytesIO
+import base64
+
+from collections import defaultdict
+import shifterator as sh
+
 from babycenterdb.results import Results
 
 from frontend.query import form
 from backend.query import build_query
+
 
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
@@ -30,6 +44,7 @@ from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
+
 
 # Initialize the app
 app = dash.Dash(
