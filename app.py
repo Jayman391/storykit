@@ -43,23 +43,35 @@ app = dash.Dash(
 raw_docs = pd.DataFrame()
 
 app.layout = html.Div([
+    # Store components for managing session data
     dcc.Store(id='raw-docs', storage_type='session'),
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
     # Removed 'rag-llm' store as RAG is managed server-side
-    form,
-    dbc.Accordion([
-        dbc.AccordionItem([
-            ngram,      
-        ], title="Ngram Analysis",),
-        dbc.AccordionItem([
-            wordshift,  
-        ], title="Sentiment Analysis",),
-        dbc.AccordionItem([
-            chatbot,  
-        ], title="RAG",),
-    ]),
-])
+
+    # Main container for the layout
+ 
+        # Optional: Add a row for the form if needed
+        dbc.Row([
+            dbc.Col(form),  # Adjust the width as necessary
+            dbc.Col(
+                dbc.Accordion([
+                    dbc.AccordionItem(
+                        children=ngram,      
+                        title="Ngram Analysis",
+                    ),
+                    dbc.AccordionItem(
+                        children=wordshift,  
+                        title="Sentiment Analysis",
+                    ),
+                    dbc.AccordionItem(
+                        children=chatbot,  
+                        title="RAG",
+                    ),
+                ], start_collapsed=True),
+            ),
+        ]),
+])  # Use fluid=True for a full-width container
 
 # Callback to control visibility of comment slider and time delta slider
 @app.callback(
@@ -83,24 +95,33 @@ def toggle_sliders(post_or_comment_value):
     return time_delta_style, comments_style
 
 
-# Callback to generate query and update the query table
+## 5. Refactor the query callback to use the Submit button
+# -------------------------------------------------------
 @app.callback(
     Output("raw-docs", "data"),
-    [
-        Input("date-range", "start_date"),
-        Input("date-range", "end_date"),
-        Input("doc-comments-range-slider", "value"),
-        Input("time-delta-slider", "value"),
-        Input("text-input", "value"),
-        Input("group-input", "value"),
-        Input("post-or-comment", "value"),
-        Input("num-documents", "value")
-    ]
+    Input("submit-query-button", "n_clicks"),
+    State("date-range", "start_date"),
+    State("date-range", "end_date"),
+    State("doc-comments-range-slider", "value"),
+    State("time-delta-slider", "value"),
+    State("text-input", "value"),
+    State("group-input", "value"),
+    State("post-or-comment", "value"),
+    State("num-documents", "value"),
 )
-def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment, num_documents):
+def generate_query(n_clicks,
+                   start_date, end_date,
+                   comments_range, time_delta,
+                   ngram_keywords, groups,
+                   post_or_comment, num_documents):
     """
-    Generate query results based on form inputs and update the query table.
+    Generate query results based on form inputs, but only when the user
+    clicks the "Submit Query" button.
     """
+    # If the button hasn't been clicked yet, do nothing
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+
     # Build the query parameters
     params = {
         'start_date': start_date,
@@ -113,10 +134,10 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'num_documents': num_documents
     }
 
-    # Build the query using backend function
+    # Build and run the query
     results = build_query(params)
 
-    # Update raw_docs
+    # Convert results to a dataframe if needed; or directly
     raw_docs_updated = results 
 
     # Initialize or update the RAG pipeline with new documents
