@@ -33,8 +33,8 @@ def build_query(params : dict) -> pd.DataFrame:
   post_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
   comment_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
 
-  posts_query = Query('posts', post_filters, output_format="df").execute()
-  comments_query = Query('comments', comment_filters, output_format="df").execute()
+  posts_query = Query('posts', post_filters, output_format="df", limit=params['num-documents']).execute()
+  comments_query = Query('comments', comment_filters, output_format="df", limit=params['num-documents']).execute()
 
   posts_df = posts_query.documents
   comments_df = comments_query.documents

@@ -1,6 +1,6 @@
 Had to update the shifterator package as it is outdated.
 
-in in shifterator/plotting.py on line 745 changed 
+in in shifterator/plotting.py on line 49 changed 
 
         "tight": True,
         

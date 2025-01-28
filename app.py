@@ -18,18 +18,33 @@ import base64
 from collections import defaultdict
 import shifterator as sh
 
+from flask_caching import Cache
+
+import matplotlib      # pip install matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
+
+import json
+from io import BytesIO
+import base64
+
+from collections import defaultdict
+import shifterator as sh
+
 from babycenterdb.results import Results
 
 from frontend.query import form
 from backend.query import build_query
 
+
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
 from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_wordshifts_and_sentiments
+from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
+
 
 # Initialize the app
 app = dash.Dash(
@@ -52,10 +67,6 @@ app.layout = html.Div([
             chatbot,  
         ], title="RAG",),
     ]),
-    # Ensure that the image component is part of the layout
-    html.Div([
-        html.Img(id='wordshift-graph', style={'width': '100%'})
-    ])
 ])
 
 # Callback to control visibility of comment slider and time delta slider
@@ -90,10 +101,11 @@ def toggle_sliders(post_or_comment_value):
         Input("time-delta-slider", "value"),
         Input("text-input", "value"),
         Input("group-input", "value"),
-        Input("post-or-comment", "value")
+        Input("post-or-comment", "value"),
+        Input("num-documents", "value")
     ]
 )
-def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment):
+def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywords, groups, post_or_comment, num_documents):
     """
     Generate query results based on form inputs and update the query table.
     """
@@ -105,12 +117,13 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'time_delta': time_delta,
         'ngram_keywords': ngram_keywords,
         'groups': groups,
-        'post_or_comment': post_or_comment
+        'post_or_comment': post_or_comment,
+        'num-documents': num_documents
     }
 
     results = build_query(params)
 
-    return results.sample(200).to_dict('records')
+    return results.to_dict('records')
     
 # Callback to update the ngram table
 @app.callback(
@@ -141,7 +154,7 @@ def update_sentiments(data):
     if not data:
         return {}
     else:
-        sentiments, _ = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+        sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
         return sentiments
 
 
@@ -158,7 +171,7 @@ def update_wordshift_graph(data):
         return ""
     else:
         try:
-            sentiments, shifts = make_daily_wordshifts_and_sentiments(data.get('dates', {}))
+            shifts = make_daily_wordshifts_parallel(data.get('dates', {}))
 
             if not shifts:
                 return ""
