@@ -1,3 +1,5 @@
+# app.py
+
 import numpy as np
 import pandas as pd
 import dash
@@ -7,20 +9,7 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 from flask_caching import Cache
 
-import matplotlib      # pip install matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-
-import json
-from io import BytesIO
-import base64
-
-from collections import defaultdict
-import shifterator as sh
-
-from flask_caching import Cache
-
-import matplotlib      # pip install matplotlib
+import matplotlib  # pip install matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
@@ -43,18 +32,21 @@ from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
-from backend.chatbot import initialize_rag, compile_rag, compute_rag
+from backend.chatbot import initialize_global_rag, compute_rag
 
 # Initialize the app
 app = dash.Dash(
     external_stylesheets=[dbc.themes.BOOTSTRAP]
 )
 
+# Initialize raw_docs as an empty DataFrame
+raw_docs = pd.DataFrame()
+
 app.layout = html.Div([
     dcc.Store(id='raw-docs', storage_type='session'),
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
-    dcc.Store(id='rag-llm', storage_type='session'),
+    # Removed 'rag-llm' store as RAG is managed server-side
     form,
     dbc.Accordion([
         dbc.AccordionItem([
@@ -118,13 +110,21 @@ def generate_query(start_date, end_date, comments_range, time_delta, ngram_keywo
         'ngram_keywords': ngram_keywords,
         'groups': groups,
         'post_or_comment': post_or_comment,
-        'num-documents': num_documents
+        'num_documents': num_documents
     }
 
+    # Build the query using backend function
     results = build_query(params)
 
+    # Update raw_docs
+    raw_docs_updated = results 
+
+    # Initialize or update the RAG pipeline with new documents
+    initialize_global_rag(raw_docs_updated['text'].tolist())
+
     return results.to_dict('records')
-    
+
+
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
@@ -141,6 +141,7 @@ def update_ngram_table(data):
         records = df.to_dict('records')
         ngrams = compute_ngrams(records, {'keywords': ['all']})
         return ngrams
+
 
 # Callback to store sentiments separately
 @app.callback(
@@ -193,41 +194,53 @@ def update_wordshift_graph(data):
             print(f"Error generating wordshift graph: {e}")
             return ""
 
-@app.callback(
-    Output("rag-llm", "data"),
-    Input("raw-docs", "data"),
-)
-def initialize_and_compile_rag(data):
-    docs = pd.DataFrame.from_records(data)[['text']]
-    llm, vector_store, prompt = initialize_rag(docs)
-    return compile_rag()
-
-
-#callback to update question value on button click
-@app.callback(
-    Output("question", "value"),
-    [Input("submit-val", "n_clicks")],
-    [State("question", "value")]
-)
-def update_question(n_clicks, question):
-    if n_clicks != 0:
-        return question
-    return ""
-
 
 @app.callback(
     Output("rag-response", "children"),
-    [Input("submit-val", "n_clicks"),
-     Input("question", "value")
-    ],
-    [State("rag-llm", "data")],
-    
+    [Input("submit-val", "n_clicks")],
+    [State("question", "value")]
 )
-def update_rag_response(submit_val, question, rag_llm):
+def update_rag_response(n_clicks, question):
     if not question:
-        return "Please ask a question."
-    if submit_val != 0:
-        return compute_rag(rag_llm, question)
+        return dbc.Alert("Please ask a question.", color="warning")
+    
+    if n_clicks and n_clicks > 0:
+        try:
+            rag_response = compute_rag(question)  # This returns a dict with 'answer' and 'context'
+            answer = rag_response.get('answer', "No answer found.")
+            context = rag_response.get('context', [])
+
+            # Format the answer
+            answer_component = html.Div([
+                html.H4("Answer"),
+                html.P(answer)
+            ], style={'marginBottom': '20px'})
+
+            # Format the context
+            if context:
+                context_components = [
+                    html.Li(f"Context {i+1}: {ctx}") for i, ctx in enumerate(context)
+                ]
+                context_component = html.Div([
+                    html.H4("Context"),
+                    html.Ul(context_components)
+                ])
+            else:
+                context_component = html.Div([
+                    html.H4("Context"),
+                    html.P("No context available.")
+                ])
+
+            return html.Div([
+                answer_component,
+                context_component
+            ])
+
+        except Exception as e:
+            # Log the error as needed
+            return dbc.Alert(f"Error processing your request: {str(e)}", color="danger")
+    
+    return ""
 
 if __name__ == "__main__":
     app.run_server(debug=True)

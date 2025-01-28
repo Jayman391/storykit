@@ -96,7 +96,7 @@ num_documents = html.Div(
             placeholder=10,
             min=1,
             step=1,
-            value=100,  # Default value
+            value=1000,  # Default value
             style={"width": "100%"},
         ),
     ],
