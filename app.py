@@ -51,33 +51,33 @@ app.layout = html.Div([
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
     # Removed 'rag-llm' store as RAG is managed server-side
-
     # Main container for the layout
- 
-        # Optional: Add a row for the form if needed
-        dbc.Row([
-            dbc.Col(form),  # Adjust the width as necessary
-            dbc.Col(
-                dbc.Accordion([
-                    dbc.AccordionItem(
-                        children=ngram,      
-                        title="Ngram Analysis",
-                    ),
-                    dbc.AccordionItem(
-                        children=wordshift,  
-                        title="Sentiment Analysis",
-                    ),
-                    dbc.AccordionItem(
-                        children=chatbot,  
-                        title="RAG",
-                    ),
-                    dbc.AccordionItem(
-                        children=topic,
-                        title="Topic Modeling",
-                    ),
-                ], start_collapsed=True),
-            ),
-        ]),
+    # Optional: Add a row for the form if needed
+    dbc.Row([
+        dbc.Col(form, style={'marginBottom': '20px', 'width': '100%'}),
+        dbc.Col(
+            dbc.Accordion([
+                dbc.AccordionItem(
+                    children=ngram,      
+                    title="Ngram Analysis",
+                ),
+                dbc.AccordionItem(
+                    children=wordshift,  
+                    title="Sentiment Analysis",
+                ),
+                dbc.AccordionItem(
+                    children=topic,
+                    title="Topic Modeling",
+                ),
+                dbc.AccordionItem(
+                    children=chatbot,  
+                    title="RAG",
+                ),
+                
+            ], start_collapsed=True),   
+            style={'marginBottom': '20px', 'width': '100%'}, 
+        ),
+    ]),
 ])  # Use fluid=True for a full-width container
 
 # Callback to control visibility of comment slider and time delta slider
@@ -269,8 +269,10 @@ def update_rag_response(n_clicks, question):
     return ""
 
 @app.callback(
-    Output("topic-document-graph", "figure"),
-    Output("topic-hierarchy-graph", "figure"),
+    [
+        Output("topic-document-graph", "figure"),
+        Output("topic-hierarchy-graph", "figure")
+    ],
     Input("raw-docs", "data")
 )
 def topic_model(data):
@@ -283,7 +285,7 @@ def topic_model(data):
     docs = pd.DataFrame.from_records(data)['text'].tolist()
     topic_model, _, _ = fit_topic_model(docs)
     docs = visualize_documents(topic_model, docs)
-    hierarchical_topics = visualize_hierarchy(topic_model, docs)
+    hierarchical_topics = visualize_hierarchy(topic_model)
 
     return docs, hierarchical_topics
 

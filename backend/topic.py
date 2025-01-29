@@ -9,6 +9,5 @@ def fit_topic_model(docs):
 def visualize_documents(topic_model : BERTopic, docs) -> Figure:
   return topic_model.visualize_documents(docs)
 
-def visualize_hierarchy(topic_model : BERTopic, docs) -> Figure:
-  hierarchical_topics = topic_model.hierarchical_topics(docs)
-  return topic_model.visualize_hierarchy(hierarchical_topics=hierarchical_topics)
+def visualize_hierarchy(topic_model : BERTopic) -> Figure:
+  return topic_model.visualize_hierarchy()
