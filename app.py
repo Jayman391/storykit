@@ -35,7 +35,7 @@ from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
-from backend.topic import fit_topic_model, make_visualizations
+from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy
 
 # Initialize the app
 app = dash.Dash(
@@ -269,7 +269,8 @@ def update_rag_response(n_clicks, question):
     return ""
 
 @app.callback(
-    Output("topic-graph", "figure"),
+    Output("topic-document-graph", "figure"),
+    Output("topic-hierarchy-graph", "figure"),
     Input("raw-docs", "data")
 )
 def topic_model(data):
@@ -281,9 +282,10 @@ def topic_model(data):
 
     docs = pd.DataFrame.from_records(data)['text'].tolist()
     topic_model, _, _ = fit_topic_model(docs)
-    fig = make_visualizations(topic_model, docs)
+    docs = visualize_documents(topic_model, docs)
+    hierarchical_topics = visualize_hierarchy(topic_model, docs)
 
-    return fig
+    return docs, hierarchical_topics
 
 if __name__ == "__main__":
     app.run_server(debug=True)
