@@ -186,10 +186,28 @@ def update_sentiments(data):
         sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
         return sentiments
 
+@app.callback(
+    Output("sentiment-plot", "figure"), 
+    Input("sentiments-data", "data")
+)
+def update_sentiment_plot(data):
+    """
+    Update the sentiment plot with the daily sentiment values.
+    """
+    if not data:
+        return {}
+    else:
+        # Convert the dictionary to a DataFrame
+        df = pd.DataFrame.from_dict(data, orient='index', columns=['sentiment'])
+        df.index = pd.to_datetime(df.index)
+
+        # Create a line plot
+        fig = px.line(df, x=df.index, y='sentiment', title='Daily Sentiment')
+        return fig
 
 # Callback to generate and display the wordshift graph image
 @app.callback(
-    Output("wordshift-graph", "src"),
+    Output("wordshift-carousel", "items"),
     Input("ngram-data", "data")
 )
 def update_wordshift_graph(data):
@@ -204,20 +222,23 @@ def update_wordshift_graph(data):
 
             if not shifts:
                 return ""
+            items = []
+            for i, shift in enumerate(shifts):
+                # For demonstration, we'll display the first shift image
+                shift.plot()  # Let shift.plot() create its own figure
+                fig = plt.gcf()  # Get current figure
+                fig.tight_layout()  # Ensure layout is tight to prevent overlaps
 
-            # For demonstration, we'll display the first shift image
-            shift = shifts[0]
-            shift.plot()  # Let shift.plot() create its own figure
-            fig = plt.gcf()  # Get current figure
-            fig.tight_layout()  # Ensure layout is tight to prevent overlaps
+                buf = BytesIO()
+                fig.savefig(buf, format='png', bbox_inches='tight')
+                buf.seek(0)
+                encoded = base64.b64encode(buf.read()).decode('utf-8')
+                plt.close(fig)  # Close the figure to free memory
 
-            buf = BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight')
-            buf.seek(0)
-            encoded = base64.b64encode(buf.read()).decode('utf-8')
-            plt.close(fig)  # Close the figure to free memory
+                items.append({"key": i, "src" : f"data:image/png;base64,{encoded}"})
+            
+            return items
 
-            return f"data:image/png;base64,{encoded}"
         except Exception as e:
             print(f"Error generating wordshift graph: {e}")
             return ""

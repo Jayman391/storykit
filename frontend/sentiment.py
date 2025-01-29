@@ -3,5 +3,16 @@ from dash import Dash, html, dash_table, dcc
 import dash_bootstrap_components as dbc
 
 wordshift = html.Div([
-  html.Img(id='wordshift-graph', style={'width': '40%'}),
+  dbc.Row([
+    dbc.Col([
+      dbc.Carousel(
+        id='wordshift-carousel',
+        controls=True,
+        items = []
+      )
+    ], width=8),
+    dbc.Col([
+      dcc.Graph(id='sentiment-plot')
+    ], width=4)
+  ])
 ])
