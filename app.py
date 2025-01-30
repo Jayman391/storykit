@@ -30,14 +30,17 @@ from backend.query import build_query
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
-from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
+from frontend.sentiment import wordshift, make_img
+from backend.sentiment import make_daily_sentiments_parallel, generate_wordshift_for_date 
 
 from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
 from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy
+
+from datetime import datetime
+
 
 # Initialize the app
 app = dash.Dash(
@@ -186,63 +189,68 @@ def update_sentiments(data):
         sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
         return sentiments
 
+# Callback to update the sentiment plot with chronological dates
 @app.callback(
     Output("sentiment-plot", "figure"), 
     Input("sentiments-data", "data")
 )
 def update_sentiment_plot(data):
-    """
-    Update the sentiment plot with the daily sentiment values.
-    """
     if not data:
         return {}
     else:
         # Convert the dictionary to a DataFrame
         df = pd.DataFrame.from_dict(data, orient='index', columns=['sentiment'])
         df.index = pd.to_datetime(df.index)
-
-        # Create a line plot
+        df = df.sort_index()  # Ensure chronological order
+         # Create a line plot with interactive selection
         fig = px.line(df, x=df.index, y='sentiment', title='Daily Sentiment')
+        fig.update_layout(clickmode='event+select')
         return fig
 
-# Callback to generate and display the wordshift graph image
+# Callback to generate and display the wordshift graph for a selected date
 @app.callback(
-    Output("wordshift-carousel", "items"),
-    Input("ngram-data", "data")
+    Output("wordshift-container", "children"),
+    Input("sentiment-plot", "clickData"),
+    State("ngram-data", "data")
 )
-def update_wordshift_graph(data):
+def update_wordshift_graph(clickData, ngram_data):
     """
-    Generate the wordshift graph image and update the 'src' of the image component.
+    Generate the wordshift graph for the selected date and display it.
     """
-    if not data:
-        return ""
-    else:
-        try:
-            shifts = make_daily_wordshifts_parallel(data.get('dates', {}))
+    if not clickData or not ngram_data:
+        return "Click on a date in the sentiment plot to see the wordshift graph."
 
-            if not shifts:
-                return ""
-            items = []
-            for i, shift in enumerate(shifts):
-                # For demonstration, we'll display the first shift image
-                shift.plot()  # Let shift.plot() create its own figure
-                fig = plt.gcf()  # Get current figure
-                fig.tight_layout()  # Ensure layout is tight to prevent overlaps
+    try:
+        # Extract the selected date
+        selected_date = clickData['points'][0]['x']
 
-                buf = BytesIO()
-                fig.savefig(buf, format='png', bbox_inches='tight')
-                buf.seek(0)
-                encoded = base64.b64encode(buf.read()).decode('utf-8')
-                plt.close(fig)  # Close the figure to free memory
+        selected_date = format_date(str(selected_date))
 
-                items.append({"key": i, "src" : f"data:image/png;base64,{encoded}"})
-            
-            return items
+        # Generate wordshift for the selected date
+        shift = generate_wordshift_for_date(selected_date, ngram_data.get('dates', {}))
+        if shift is None:
+            return f"No wordshift data available for {selected_date}."
 
-        except Exception as e:
-            print(f"Error generating wordshift graph: {e}")
-            return ""
+        # Plot the wordshift graph
+        shift.plot()
+        fig = plt.gcf()
+        fig.tight_layout()
 
+        # Convert plot to base64 image
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        encoded = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+
+        # Create the image component
+        image = html.Img(src=f"data:image/png;base64,{encoded}", style={'width': '100%'})
+
+        return image
+
+    except Exception as e:
+        print(f"Error generating wordshift graph: {e}")
+        return "An error occurred while generating the wordshift graph."
 
 @app.callback(
     Output("rag-response", "children"),
@@ -425,6 +433,16 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
     )
 
     return fig
+
+
+def format_date(date_str):
+    # Parse the input date string
+    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+    
+    # Format the date to the desired format
+    formatted_date = date_obj.strftime("%a, %d %b %Y 00:00:00")
+    
+    return formatted_date
 
 if __name__ == "__main__":
     app.run_server(debug=True)
