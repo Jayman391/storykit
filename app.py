@@ -37,7 +37,7 @@ from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
-from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy
+from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap
 
 from datetime import datetime
 
@@ -106,7 +106,6 @@ def toggle_sliders(post_or_comment_value):
 
     return time_delta_style, comments_style
 
-
 @app.callback(
     Output("raw-docs", "data"),
     Input("submit-query-button", "n_clicks"),
@@ -155,7 +154,6 @@ def generate_query(n_clicks,
 
     return results.to_dict('records')
 
-
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
@@ -172,7 +170,6 @@ def update_ngram_table(data):
         records = df.to_dict('records')
         ngrams = compute_ngrams(records, {'keywords': ['all']})
         return ngrams
-
 
 # Callback to store sentiments separately
 @app.callback(
@@ -302,7 +299,8 @@ def update_rag_response(n_clicks, question):
 @app.callback(
     [
         Output("topic-document-graph", "figure"),
-        Output("topic-hierarchy-graph", "figure")
+        Output("topic-hierarchy-graph", "figure"),
+        Output("heatmap-graph", "figure")
     ],
     Input("raw-docs", "data")
 )
@@ -314,11 +312,16 @@ def topic_model(data):
         return {}
 
     docs = pd.DataFrame.from_records(data)['text'].tolist()
+    dates = pd.DataFrame.from_records(data)['date'].tolist()
+    dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
+    print(len(dates))
+    print(len(docs))
     topic_model, _, _ = fit_topic_model(docs)
     docs = visualize_documents(topic_model, docs)
     hierarchical_topics = visualize_hierarchy(topic_model)
+    topics_over_time = visualize_heatmap(topic_model)
 
-    return docs, hierarchical_topics
+    return docs, hierarchical_topics, topics_over_time
 
 @app.callback(
     Output("ngram-table", "data"),
@@ -396,7 +399,8 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
         y_vals = []
 
         # Sort dates so lines go from earliest to latest
-        sorted_dates = sorted(dates_dict.keys())
+        sorted_dates = list(dates_dict.keys())
+        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
 
         # For each date, see if that ngram appears and gather its rank
         for date_str in sorted_dates:
@@ -414,10 +418,10 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
                     found = True
                     break
             # If the ngram wasn't found for a given date, it's simply not plotted for that date
-    
+
         # Add a new Scatter trace for this ngram
         fig.add_trace(
-            go.Scatter(
+            go.scatter.Line(
                 x=x_vals, 
                 y=y_vals, 
                 mode='lines+markers',

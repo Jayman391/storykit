@@ -4,5 +4,6 @@ import dash_bootstrap_components as dbc
 
 topic = html.Div([
   dcc.Graph(id='topic-document-graph'),
-  dcc.Graph(id='topic-hierarchy-graph')
+  dcc.Graph(id='topic-hierarchy-graph'),
+  dcc.Graph(id='heatmap-graph')
 ])
