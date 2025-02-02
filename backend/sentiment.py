@@ -147,3 +147,50 @@ def make_daily_wordshifts_parallel(days: dict, window: int = 2):
     shifts = [shift for shift in results if shift is not None]
 
     return shifts
+
+def generate_wordshift_for_date(day, days):
+    """
+    Generate a wordshift graph for a specific day.
+    """
+    try:
+        day_data = days.get(day, {})
+        day_words = day_data.get('1-gram', {}).get('counts', {})
+        if not day_words:
+            return None
+
+        # Filter words present in labmt_dict
+        filtered_words = {k: v for k, v in day_words.items() if k in labmt_dict}
+        if not filtered_words:
+            return None
+
+        total_day_counts = sum(filtered_words.values())
+        if total_day_counts == 0:
+            return None
+
+        # Calculate sentiment
+        day_sentiment = sum((v / total_day_counts) * labmt_dict[k] for k, v in filtered_words.items())
+
+        # For wordshift, you might want to define a window or use specific comparison
+        # Here, we'll compare the day's word distribution to the overall distribution
+        overall_freq = Counter()
+        for d, data in days.items():
+            counts = data.get('1-gram', {}).get('counts', {})
+            filtered = {k: v for k, v in counts.items() if k in labmt_dict}
+            overall_freq.update(filtered)
+        overall_freq = dict(overall_freq)
+
+        shift = sh.WeightedAvgShift(
+            type2freq_1=filtered_words,
+            type2freq_2=overall_freq,
+            type2score_1='labMT_English',
+            type2score_2='labMT_English',
+            reference_value=day_sentiment,
+            handle_missing_scores='exclude'
+        ).get_shift_graph()
+
+        return shift
+
+    except Exception as e:
+        print(f"Error generating wordshift for {day}: {e}")
+        traceback.print_exc()
+        return None
