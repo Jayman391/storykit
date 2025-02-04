@@ -37,7 +37,10 @@ def build_query(params : dict) -> pd.DataFrame:
   comments_query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
 
   posts_df = posts_query.documents
+  posts_df['type'] = 'post'
   comments_df = comments_query.documents
+  comments_df['type'] = 'comment'
+
   # Concatenate DataFrames
   combined_df = pd.concat([posts_df, comments_df], ignore_index=True)
   

@@ -27,6 +27,9 @@ from babycenterdb.results import Results
 from frontend.query import form
 from backend.query import build_query
 
+from frontend.stats import stats
+from backend.stats import compute_statistics
+
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
@@ -71,7 +74,8 @@ app.layout = html.Div([
             dbc.Col(form, width=3),
             dbc.Col(
                 dbc.Accordion(
-                    [
+                    [   
+                        dbc.AccordionItem(stats, title="Query Statistics"),
                         dbc.AccordionItem(ngram, title="Ngram Analysis"),
                         dbc.AccordionItem(wordshift, title="Sentiment Analysis"),
                         dbc.AccordionItem(topic, title="Topic Modeling"),
@@ -440,6 +444,22 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
     )
 
     return fig
+
+@app.callback(
+    Output("document-stats", "data"),
+    Input("raw-docs", "data")
+)
+def update_document_stats(data):
+    """
+    Update the document stats table with the query results.
+    """
+    if data is None:
+        return []
+    
+    df = pd.DataFrame.from_records(data)
+    stats = compute_statistics(df)
+    
+    return stats
 
 
 def format_date(date_str):
