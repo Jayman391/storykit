@@ -50,40 +50,43 @@ app = dash.Dash(
 # Initialize raw_docs as an empty DataFrame
 raw_docs = pd.DataFrame()
 
+navbar = dbc.Navbar(
+    dbc.Container(
+        dbc.NavbarBrand("BabyCenter Dashboard", className="mx-auto")
+    ),
+    color="primary",
+    dark=True,
+    className="mb-4"
+)
 app.layout = html.Div([
     # Store components for managing session data
     dcc.Store(id='raw-docs', storage_type='session'),
     dcc.Store(id='ngram-data', storage_type='session'),
     dcc.Store(id='sentiments-data', storage_type='session'),
-    # Removed 'rag-llm' store as RAG is managed server-side
-    # Main container for the layout
-    # Optional: Add a row for the form if needed
-    dbc.Row([
-        dbc.Col(form, style={'marginBottom': '20px', 'width': '100%'}),
-        dbc.Col(
-            dbc.Accordion([
-                dbc.AccordionItem(
-                    children=ngram,      
-                    title="Ngram Analysis",
+    # Navbar at the top
+    navbar,
+
+    dbc.Container([
+        dbc.Row([
+            dbc.Col(form, width=3),
+            dbc.Col(
+                dbc.Accordion(
+                    [
+                        dbc.AccordionItem(ngram, title="Ngram Analysis"),
+                        dbc.AccordionItem(wordshift, title="Sentiment Analysis"),
+                        dbc.AccordionItem(topic, title="Topic Modeling"),
+                        dbc.AccordionItem(chatbot, title="RAG Chatbot"),
+                    ],
+                    start_collapsed=True,
+                    flush=True
                 ),
-                dbc.AccordionItem(
-                    children=wordshift,  
-                    title="Sentiment Analysis",
-                ),
-                dbc.AccordionItem(
-                    children=topic,
-                    title="Topic Modeling",
-                ),
-                dbc.AccordionItem(
-                    children=chatbot,  
-                    title="RAG",
-                ),
-                
-            ], start_collapsed=True),   
-            style={'marginBottom': '20px', 'width': '100%'}, 
-        ),
-    ]),
-])  # Use fluid=True for a full-width container
+                width=9
+            )
+        ], className="mb-4")
+    ], fluid=True)
+])
+
+
 
 # Callback to control visibility of comment slider and time delta slider
 @app.callback(
@@ -421,7 +424,7 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
 
         # Add a new Scatter trace for this ngram
         fig.add_trace(
-            go.scatter.Line(
+            go.Scatter(
                 x=x_vals, 
                 y=y_vals, 
                 mode='lines+markers',

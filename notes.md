@@ -1,4 +1,5 @@
 Had to update the shifterator package as it is outdated.
+These are notes to manually update the deprecated items for python 3.11
 
 in in shifterator/plotting.py on line 49 changed 
 
@@ -8,7 +9,6 @@ in in shifterator/plotting.py on line 49 changed
 
         "tight": False,
 
-
 in shifterator/plotting.py on line 745 changed 
 '''for tick in in_ax.yaxis.get_major_ticks():
         tick.label.set_fontsize(11)'''
@@ -17,13 +17,11 @@ to
 
 '''in_ax.tick_params(axis='y', labelsize=11)'''
 
-
 in shifterator/plotting.py on line 799 changed 
 
   '''for tick in in_ax.yaxis.get_major_ticks():
         tick.label.set_fontsize(12)'''
 to
-    
   '''in_ax.tick_params(axis='y', labelsize=12)'''
 
 in shifterator/helper py on line 157 changed 

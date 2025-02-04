@@ -4,6 +4,16 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 import pandas as pd
 
+card_style = {
+    'padding': '15px',
+    'marginBottom': '20px',
+    'boxShadow': '0 0.125rem 0.25rem rgba(0,0,0,0.075)',
+    'border': '1px solid #dee2e12',
+    'borderRadius': '0.25rem',
+    'backgroundColor': '#ffffff',
+    'margin': 'auto'
+}
+
 date_range_slider = html.Div(
     [
         dbc.Label("Date Range", html_for="date-range"),
@@ -113,76 +123,52 @@ post_or_comment_checkbox = html.Div(
     className="mb-3",
 )
 
-# 2. Wrap everything in a form, adding a row for the Submit button
-form = dbc.Container(
-    [
+form = dbc.Card(
+    dbc.CardBody(
         dbc.Form(
             [
                 dbc.Row(
-                    [
-                        dbc.Col(date_range_slider, width=6),
-                    ],
+                    dbc.Col(date_range_slider, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(comments_slider, width=6),
-                    ],
+                    dbc.Col(comments_slider, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(time_delta_slider, width=6),
-                    ],
+                    dbc.Col(time_delta_slider, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(post_or_comment_checkbox, width=6),
-                    ],
+                    dbc.Col(post_or_comment_checkbox, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(ngram_input, width=6),
-                    ],
+                    dbc.Col(ngram_input, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(group_input, width=6),
-                    ],
+                    dbc.Col(group_input, width=12),
                     className="mb-3",
                 ),
                 dbc.Row(
-                    [
-                        dbc.Col(num_documents, width=6),
-                    ],
+                    dbc.Col(num_documents, width=12),
                     className="mb-3",
                 ),
-                # New row for Submit button
                 dbc.Row(
-                    [
-                        dbc.Col(
-                            dbc.Button(
-                                "Submit Query", 
-                                id="submit-query-button", 
-                                color="primary",
-                                className="me-2"
-                            ), 
-                            width=12
-                        ),
-                    ],
+                    dbc.Col(
+                        dbc.Button(
+                            "Submit Query", 
+                            id="submit-query-button", 
+                            color="primary",
+                            className="me-2",
+                        ), 
+                        width=12
+                    ),
                     className="mb-3",
                 ),
             ]
-        ),
-    ],
-    style={
-        'margin-top': '20px',
-        'width': '80%',
-        'margin-left': 'auto',
-        'margin-right': 'auto',
-        'text-align': 'left',
-    },
+        )
+    ),
+    style=card_style
 )
