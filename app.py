@@ -33,7 +33,7 @@ from backend.stats import compute_statistics
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
-from frontend.sentiment import wordshift, make_img
+from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, generate_wordshift_for_date 
 
 from frontend.chatbot import chatbot
@@ -44,10 +44,12 @@ from backend.topic import fit_topic_model, visualize_documents, visualize_hierar
 
 from datetime import datetime
 
+from dash_extensions.enrich import DashProxy, Output, Input, State, Serverside, html, dcc, ServersideOutputTransform
 
 # Initialize the app
-app = dash.Dash(
-    external_stylesheets=[dbc.themes.BOOTSTRAP]
+app = DashProxy(
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    transforms=[ServersideOutputTransform()]
 )
 
 # Initialize raw_docs as an empty DataFrame
@@ -61,12 +63,13 @@ navbar = dbc.Navbar(
     dark=True,
     className="mb-4"
 )
+
 app.layout = html.Div([
     # Store components for managing session data
-    dcc.Store(id='raw-docs', storage_type='session'),
-    dcc.Store(id='ngram-data', storage_type='session'),
-    dcc.Store(id='sentiments-data', storage_type='session'),
-    dcc.Store(id='topics', storage_type='session'),
+    dcc.Store(id='raw-docs', storage_type='memory'),
+    dcc.Store(id='ngram-data', storage_type='memory'),
+    dcc.Store(id='sentiments-data', storage_type='memory'),
+    dcc.Store(id='topics', storage_type='memory'),
     # Navbar at the top
     navbar,
 
@@ -163,14 +166,14 @@ def generate_query(n_clicks,
     # Initialize or update the RAG pipeline with new documents
     initialize_global_rag(raw_docs_updated['text'].tolist())
 
-    return results.to_dict('records')
+    return Serverside(results.to_dict('records'))
 
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
     Input("raw-docs", "data")
 )
-def update_ngram_table(data):
+def update_ngram_data(data):
     """
     Update the ngram table with the query results.
     """
@@ -180,7 +183,7 @@ def update_ngram_table(data):
         df = pd.DataFrame.from_records(data)[['text', 'date']]
         records = df.to_dict('records')
         ngrams = compute_ngrams(records, {'keywords': ['all']})
-        return ngrams
+        return Serverside(ngrams)
 
 # Callback to store sentiments separately
 @app.callback(
@@ -252,7 +255,7 @@ def update_wordshift_graph(clickData, ngram_data):
         plt.close(fig)
 
         # Create the image component
-        image = html.Img(src=f"data:image/svg;base64,{encoded}", style={'width': '100%'})
+        image = html.Img(src=f"data:image/svg+xml;base64,{encoded}", style={'width': '100%'})
 
         return image
 
@@ -318,24 +321,40 @@ def update_rag_response(n_clicks, question):
 )
 def topic_model(data):
     """
-    Fit a topic model and return the visualization.
+    Fit a topic model and return the visualizations.
     """
+    # If no data is available, do nothing (avoid returning a single {} for 4 outputs)
     if not data:
-        return {}
+        raise dash.exceptions.PreventUpdate
 
-    docs = pd.DataFrame.from_records(data)['text'].tolist()
-    dates = pd.DataFrame.from_records(data)['date'].tolist()
-    dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
-    print(len(dates))
-    print(len(docs))
-    topic_model, _, _ = fit_topic_model(docs)
-    docs = visualize_documents(topic_model, docs)
-    hierarchical_topics = visualize_hierarchy(topic_model)
-    topics_over_time = visualize_heatmap(topic_model)
+    # Convert the stored data into a DataFrame
+    df = pd.DataFrame.from_records(data)
+    if df.empty or 'text' not in df:
+        raise dash.exceptions.PreventUpdate
 
-    topics = topic_model.topics_ 
+    docs = df['text'].tolist()
+    
+    # If your data includes a "date" column, you can optionally parse it:
+    if 'date' in df:
+        dates = df['date'].tolist()
+        try:
+            dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
+        except Exception as e:
+            print("Date parsing error:", e)
+            dates = None
 
-    return docs, hierarchical_topics, topics_over_time, topics
+    # Fit the topic model on the documents
+    topic_model_obj, _, _ = fit_topic_model(docs)
+    
+    # Generate the visualizations
+    fig_documents = visualize_documents(topic_model_obj, docs)
+    fig_hierarchy = visualize_hierarchy(topic_model_obj)
+    fig_heatmap = visualize_heatmap(topic_model_obj)
+
+    # Retrieve topics (e.g., a list of topic IDs)
+    topics = topic_model_obj.topics_
+
+    return fig_documents, fig_hierarchy, fig_heatmap, topics
 
 @app.callback(
     Output("ngram-table", "data"),

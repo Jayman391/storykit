@@ -48,7 +48,3 @@ wordshift = dbc.Card(
     ],
     style=card_style,
 )
-
-
-def make_img(image_src):
-    return html.Img(src=image_src, style={'width': '100%'})
