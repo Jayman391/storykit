@@ -14,18 +14,37 @@ card_style = {
 wordshift = dbc.Card(
     [
         dbc.CardHeader("Sentiment Analysis"),
-        dbc.CardBody(
-            dbc.Row([
-                dbc.Col(id='wordshift-container', width=4),
+        dbc.CardBody([
+            dbc.Row([ 
                 dbc.Col(
+                    id='wordshift-container', width=4,  
+                ),
+                dbc.Col([
                     dcc.Graph(
                         id='sentiment-plot',
                         config={'displayModeBar': False}
                     ),
-                    width=8
+                ], width=8),
+            ]),
+            dbc.Row([
+                dbc.Col(
+                    dbc.Button(
+                        "Download Wordshift Plot", 
+                        id="download-wordshift-button", 
+                        color="secondary",
+                        size="sm"
+                    ),
                 ),
+                dbc.Col(
+                    dbc.Button(
+                        "Download Sentiment Timeseries", 
+                        id="download-sentiment-button", 
+                         color="secondary",
+                        size="sm"
+                    ),
+                ), 
             ])
-        ),
+        ]),
     ],
     style=card_style,
 )

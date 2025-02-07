@@ -21,8 +21,6 @@ def build_query(params : dict) -> pd.DataFrame:
     comment_filters.append(babycenterdb.filter.DateFilter(floor=datetime.strptime(params['start_date'], '%Y-%m-%d'), ceiling=datetime.strptime(params['end_date'], '%Y-%m-%d')))
   if params['comments_range']:
     post_filters.append(babycenterdb.filter.NumCommentsFilter(floor=params['comments_range'][0], ceiling=params['comments_range'][1]))
-  if params['time_delta']:
-    comment_filters.append(babycenterdb.filter.TimeDeltaFilter(floor=params['time_delta'][0], ceiling=params['time_delta'][1]))
   if params['ngram_keywords']:
     post_filters.append(babycenterdb.filter.TextFilter(value_list=params['ngram_keywords'].split(',')))
     comment_filters.append(babycenterdb.filter.TextFilter(value_list=params['ngram_keywords'].split(',')))

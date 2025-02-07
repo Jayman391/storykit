@@ -33,16 +33,22 @@ ngram = dbc.Card(
                             'backgroundColor': '#f8f9fa', 
                             'fontWeight': 'bold'
                         },
+                        export_format="csv",
                     ),
                     width=4
                 ),
-                dbc.Col(
+                dbc.Col([
                     dcc.Graph(
                         id='ngram-plot',
                         config={'displayModeBar': False}
                     ),
-                    width=8
-                ),
+                    dbc.Button(
+                        "Download Timeseries", 
+                        id="download-timeseries-button", 
+                        color="secondary",
+                    )
+                ], width=8),
+               
             ])
         ),
     ],

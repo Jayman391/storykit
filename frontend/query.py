@@ -47,24 +47,6 @@ comments_slider = html.Div(
     id="comments-slider-container",
 )
 
-time_delta_slider = html.Div(
-    [
-        dbc.Label("Time Delta", html_for="time-delta-slider"),
-        dcc.RangeSlider(
-            id="time-delta-slider",
-            min=-50,
-            max=50,
-            step=10,
-            value=[0, 20],
-            marks={i: str(i) for i in range(-50, 51, 10)},
-            tooltip={"placement": "bottom", "always_visible": True},
-        ),
-        html.Div(id="time-delta-output", style={"margin-top": "10px"}),
-    ],
-    className="mb-3",
-    id="time-delta-slider-container",
-)
-
 ngram_input = html.Div(
     [
         dbc.Label("Enter Ngram Keywords", html_for="text-input"),
@@ -136,10 +118,6 @@ form = dbc.Card(
                     className="mb-3",
                 ),
                 dbc.Row(
-                    dbc.Col(time_delta_slider, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
                     dbc.Col(post_or_comment_checkbox, width=12),
                     className="mb-3",
                 ),
@@ -157,13 +135,19 @@ form = dbc.Card(
                 ),
                 dbc.Row(
                     dbc.Col(
-                        dbc.Button(
-                            "Submit Query", 
-                            id="submit-query-button", 
-                            color="primary",
-                            className="me-2",
-                        ), 
-                        width=12
+                        [
+                            dbc.Button(
+                                "Submit Query", 
+                                id="submit-query-button", 
+                                color="primary",
+                                className="me-2",
+                            ), 
+                            dbc.Button(
+                                "Download Documents", 
+                                id="download-query-button", 
+                                color="secondary",
+                            )
+                        ],
                     ),
                     className="mb-3",
                 ),
