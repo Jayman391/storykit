@@ -5,7 +5,6 @@ from datetime import datetime
 import pandas as pd
 
 def build_query(params : dict) -> pd.DataFrame:
-  print(params['post_or_comment'])
   post_filters = []
   comment_filters = []
   if params['start_date'] and params['end_date']:
@@ -46,18 +45,18 @@ def build_query(params : dict) -> pd.DataFrame:
     
     # Convert ObjectId to String
     if '_id' in combined_df.columns:
-        combined_df['_id'] = combined_df['_id'].astype(str)
-    
+        combined_df['_id'] = combined_df['_id'].astype(str) 
     return combined_df  
-  elif params['post_or_comment'][0] == 'post':
-    query = Query(params['post_or_comment'][0], post_filters, output_format="df", limit=params['num_documents']).execute()
+  if params['post_or_comment'][0] == 'post':
+    print("made it here")
+    query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
     df = query.documents
     df['type'] = 'post'
     if '_id' in df.columns:
         df['_id'] = df['_id'].astype(str) 
     return df
-  elif params['post_or_comment'][0] == 'comment':
-    query = Query(params['post_or_comment'][0], comment_filters, output_format="df", limit=params['num_documents']).execute()
+  if params['post_or_comment'][0] == 'comment':
+    query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
     df = query.documents
     df['type'] = 'comment'
     if '_id' in df.columns:

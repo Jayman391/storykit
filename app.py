@@ -163,6 +163,8 @@ def generate_query(n_clicks,
     # Convert results to a dataframe if needed; or directly
     raw_docs_updated = results 
 
+    print(raw_docs_updated)
+
     # Initialize or update the RAG pipeline with new documents
     initialize_global_rag(raw_docs_updated['text'].tolist())
 
