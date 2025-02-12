@@ -665,5 +665,40 @@ def download_sentiment_timeseries(n_clicks, figure):
     return dcc.send_bytes(buf.getvalue(), "sentiment_timeseries.svg")
 
 
+### Dynamic Config Form Callbacks
+
+
+# ------------------------
+# CALLBACKS FOR DYNAMIC RENDERING
+# ------------------------
+
+# Toggle the UMAP metric dropdown container based on the selected dimensionality reduction technique.
+@app.callback(
+    Output('umap-container', 'style'),
+    Input('dimred-radio', 'value')
+)
+def toggle_umap_metric(selected_dimred):
+    if selected_dimred == 'UMAP':
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+# Toggle the clustering configuration components:
+# - Show the "numclusters" container only for KMeans and Spectral Clustering.
+# - Show the HDBSCAN hyperparameters only when HDBSCAN is selected.
+@app.callback(
+    [Output('numclusters-container', 'style'),
+     Output('hdbscan-container', 'style')],
+    Input('cluster-radio', 'value')
+)
+def toggle_clustering_options(selected_cluster):
+    if selected_cluster in ['KMeans', 'Spectral']:
+         return {'display': 'block'}, {'display': 'none'}
+    elif selected_cluster == 'HDBSCAN':
+         return {'display': 'none'}, {'display': 'block'}
+    else:
+         return {'display': 'none'}, {'display': 'none'}
+
 if __name__ == "__main__":
     app.run_server(debug=True)
