@@ -57,7 +57,7 @@ def compute_single_day_sentiment(args):
     
     return day_id, total_day_sentiment
 
-def make_daily_sentiments_parallel(days: dict) -> dict:
+def make_daily_sentiments_parallel(days: dict, smoothing:int=1) -> dict:
     """
     A parallelized version of make_daily_sentiments. Returns a dictionary
     of {day_id: sentiment}.
@@ -73,6 +73,16 @@ def make_daily_sentiments_parallel(days: dict) -> dict:
         for day_id, sentiment in pool.map(compute_single_day_sentiment, tasks):
             if sentiment is not None:
                 results_dict[day_id] = sentiment
+
+    # Apply smoothing
+    if smoothing > 1:
+        smoothed_results = {}
+        for idx, (day_id, sentiment) in enumerate(results_dict.items()):
+            if idx < smoothing:
+                continue
+            smoothed_sentiment = np.mean(list(results_dict.values())[idx-smoothing:idx])
+            smoothed_results[day_id] = smoothed_sentiment
+        return smoothed_results
     
     return results_dict
 

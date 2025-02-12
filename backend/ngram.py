@@ -8,18 +8,19 @@ def compute_ngrams(data: list, params: dict) -> dict:
     full_corpus = {}
 
     ngrams = params.get("keywords", [])
-    ns = [1]
-    for ngram in ngrams:
-        length = len(ngram.split())
-        if length > 1:
-            ns.append(length)
-    if "all" in ngrams:
+    if "all" in ngrams:    
+        ns = [1]
+        for ngram in ngrams:
+            length = len(ngram.split())
+            if length > 1:
+                ns.append(length)
         ngrams.remove("all")
         if not ngrams:
             ngrams = []
-    ns = np.unique(ns)
-
-    # Initialize full corpus counters for each n
+        ns = np.unique(ns)
+    else:
+        ns = [params.get("n", 1)]
+    # Initialize full corpus counters gifor each n
     for n in ns:
         full_corpus[f'{n}-gram'] = Counter()
 
@@ -77,6 +78,14 @@ def compute_ngrams(data: list, params: dict) -> dict:
                 'ranks': ranks
             }
 
+    # delete ngrams with counts less than 3
+    for date_str in dates:
+        for n in dates[date_str]:
+            counts = dates[date_str][n]
+            for ngram in list(counts.keys()):
+                if counts[ngram] < 3:
+                    del counts[ngram]
+
     # Compute ranks for the full corpus
     for n in full_corpus:
         counts = full_corpus[n]
@@ -93,6 +102,13 @@ def compute_ngrams(data: list, params: dict) -> dict:
             'counts': dict(counts),
             'ranks': ranks
         }
+
+    # delete ngrams with counts less than 3
+    for n in full_corpus:
+        counts = full_corpus[n]
+        for ngram in list(counts.keys()):
+            if counts[ngram] < 3:
+                del counts[ngram]
 
     return {'dates': dates, 'full_corpus': full_corpus}
 
