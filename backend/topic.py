@@ -42,3 +42,7 @@ def visualize_hierarchy(topic_model : BERTopic) -> Figure:
 def visualize_heatmap(topic_model : BERTopic) -> Figure:
   return topic_model.visualize_heatmap()
 
+def visualize_topics_over_time(topic_model : BERTopic, docs, dates) -> Figure:
+  topics_over_time = topic_model.topics_over_time(docs, dates)
+  return topic_model.visualize_topics_over_time(topics_over_time)
+

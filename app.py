@@ -40,7 +40,7 @@ from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
-from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap
+from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap, visualize_topics_over_time
 
 from frontend.config import configforms
 
@@ -101,10 +101,20 @@ app.layout = html.Div([
     dcc.Download(id="download-documents"),
     dcc.Download(id="download-hierarchy"),
     dcc.Download(id="download-heatmap"),
+    dcc.Download(id="topics-over-time"),
     dcc.Download(id="download-wordshift"),
     dcc.Download(id="download-sentiment")
 ])
 
+
+def format_date(date_str):
+    # Parse the input date string
+    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+    
+    # Format the date to the desired format
+    formatted_date = date_obj.strftime("%a, %d %b %Y 00:00:00")
+    
+    return formatted_date
 
 @app.callback(
     Output("raw-docs", "data"),
@@ -290,6 +300,8 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
             go.Scatter(
                 x=x_vals, 
                 y=y_vals, 
+                dx=1,
+                dy=1,
                 mode='lines+markers',
                 name=ngram_text
             )
@@ -435,6 +447,7 @@ def update_rag_response(n_clicks, question):
         Output("topic-document-graph", "figure"),
         Output("topic-hierarchy-graph", "figure"),
         Output("heatmap-graph", "figure"),
+        Output("tot-graph", "figure"),
         Output("topics", "data"),
     ],
     Input("submit-topic-config", "n_clicks"),
@@ -462,15 +475,21 @@ def topic_model(n_clicks, modelname, dimredradio, dimreddims, clusterradio, n_cl
         raise dash.exceptions.PreventUpdate
 
     docs = df['text'].tolist()
-    
+    dates = None
+
     # If your data includes a "date" column, you can optionally parse it:
     if 'date' in df:
-        dates = df['date'].tolist()
-        try:
-            dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
-        except Exception as e:
-            print("Date parsing error:", e)
-            dates = None
+        dates = df['date'].astype(str).tolist()
+        datetimes = []
+        for date in dates:
+            try:
+                datetimes.append(datetime.strptime(date, "%Y-%m-%dT%H:%M:%S"))
+            except ValueError:
+                try:
+                    datetimes.append(datetime.strptime(date, "%Y-%m-%d"))
+                except ValueError:
+                    datetimes.append(None)
+      
 
     # Fit the topic model on the documents
     topic_model_obj, _, _ = fit_topic_model(docs, modelname=modelname, dimredparams={'dimred_radio': dimredradio, 'dimred_dims': dimreddims}, clusterparams={'cluster_radio': clusterradio, 'n_clusters': n_clusters, 'min_cluster_size': min_cluster_size, 'min_samples': min_samples, 'metric': metric})
@@ -479,11 +498,11 @@ def topic_model(n_clicks, modelname, dimredradio, dimreddims, clusterradio, n_cl
     fig_documents = visualize_documents(topic_model_obj, docs)
     fig_hierarchy = visualize_hierarchy(topic_model_obj)
     fig_heatmap = visualize_heatmap(topic_model_obj)
-
+    fig_tot = visualize_topics_over_time(topic_model_obj, docs, dates)
     # Retrieve topics (e.g., a list of topic IDs)
     topics = topic_model_obj.topics_
 
-    return fig_documents, fig_hierarchy, fig_heatmap, topics
+    return fig_documents, fig_hierarchy, fig_heatmap, fig_tot, topics
 
 
 
@@ -581,6 +600,22 @@ def download_heatmap(n_clicks, figure):
     buf.seek(0)
     return dcc.send_bytes(buf.getvalue(), "heatmap.svg")
 
+@app.callback(
+    Output("topics-over-time", "data"),
+    Input("download-tot-button", "n_clicks"),
+    State("tot-graph", "figure"),
+    prevent_initial_call=True
+)
+def download_topics_over_time(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "topics_over_time.svg")
+
+
 
 # 6. Download the Wordshift plot
 @app.callback(
@@ -628,14 +663,6 @@ def download_sentiment_timeseries(n_clicks, figure):
     buf.seek(0)
     return dcc.send_bytes(buf.getvalue(), "sentiment_timeseries.svg")
 
-def format_date(date_str):
-    # Parse the input date string
-    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-    
-    # Format the date to the desired format
-    formatted_date = date_obj.strftime("%a, %d %b %Y 00:00:00")
-    
-    return formatted_date
 
 if __name__ == "__main__":
     app.run_server(debug=True)
