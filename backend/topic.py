@@ -13,6 +13,7 @@ def fit_topic_model(docs, modelname, dimredparams, clusterparams):
   reducer = initialize_reducer(dimredparams)
   clusterer = initialize_clusterer(clusterparams)
   topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=SentenceTransformer(modelname), nr_topics='auto', umap_model=reducer, hdbscan_model=clusterer)
+
   topics, probs = topic_model.fit_transform(docs)
   return topic_model, topics, probs
 
@@ -33,7 +34,7 @@ def initialize_reducer(params : dict):
   return reducer
 
 def visualize_documents(topic_model : BERTopic, docs) -> Figure:
-  return topic_model.visualize_documents(docs)
+  return topic_model.visualize_documents(docs, sample=0.1)
 
 def visualize_hierarchy(topic_model : BERTopic) -> Figure:
   return topic_model.visualize_hierarchy()

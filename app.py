@@ -147,12 +147,26 @@ def generate_query(n_clicks,
     # Convert results to a dataframe if needed; or directly
     raw_docs_updated = results 
 
-    print(raw_docs_updated)
-
     # Initialize or update the RAG pipeline with new documents
     initialize_global_rag(raw_docs_updated['text'].tolist())
 
     return Serverside(results.to_dict('records'))
+
+@app.callback(
+    Output("document-stats", "data"),
+    Input("raw-docs", "data")
+)
+def update_document_stats(data):
+    """
+    Update the document stats table with the query results.
+    """
+    if data is None:
+        return []
+    
+    df = pd.DataFrame.from_records(data)
+    stats = compute_statistics(df)
+    
+    return stats
 
 # Callback to update the ngram table
 @app.callback(
@@ -423,9 +437,18 @@ def update_rag_response(n_clicks, question):
         Output("heatmap-graph", "figure"),
         Output("topics", "data"),
     ],
-    Input("raw-docs", "data")
+    Input("submit-topic-config", "n_clicks"),
+    State("embedding-model", "value"),
+    State("dimred-radio", "value"),
+    State("dimred-dims", "value"),
+    State("cluster-radio", "value"),
+    State("num-clusters", "value"),
+    State("min-cluster-size", "value"),
+    State("min-samples", "value"),
+    State("metric", "value"),
+    State("raw-docs", "data")
 )
-def topic_model(data):
+def topic_model(n_clicks, modelname, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, metric, data):
     """
     Fit a topic model and return the visualizations.
     """
@@ -450,7 +473,7 @@ def topic_model(data):
             dates = None
 
     # Fit the topic model on the documents
-    topic_model_obj, _, _ = fit_topic_model(docs)
+    topic_model_obj, _, _ = fit_topic_model(docs, modelname=modelname, dimredparams={'dimred_radio': dimredradio, 'dimred_dims': dimreddims}, clusterparams={'cluster_radio': clusterradio, 'n_clusters': n_clusters, 'min_cluster_size': min_cluster_size, 'min_samples': min_samples, 'metric': metric})
     
     # Generate the visualizations
     fig_documents = visualize_documents(topic_model_obj, docs)
@@ -463,21 +486,6 @@ def topic_model(data):
     return fig_documents, fig_hierarchy, fig_heatmap, topics
 
 
-@app.callback(
-    Output("document-stats", "data"),
-    Input("raw-docs", "data")
-)
-def update_document_stats(data):
-    """
-    Update the document stats table with the query results.
-    """
-    if data is None:
-        return []
-    
-    df = pd.DataFrame.from_records(data)
-    stats = compute_statistics(df)
-    
-    return stats
 
 # ======================
 # DOWNLOAD CALLBACKS

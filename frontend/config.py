@@ -110,7 +110,8 @@ embeddingmodel = dbc.Col(
         dcc.Textarea(
             id='embedding-model',
             placeholder='Enter Sentence Transformers Model Name',
-            style={'width': '100%'}
+            style={'width': '100%'},
+            value='all-MiniLM-L6-v2'
         )
     ],
     className="mb-3"
@@ -158,7 +159,7 @@ clusterradio = dbc.Col(
                 {'label': 'KMeans', 'value': 'KMeans'},
                 {'label': 'Spectral Clustering', 'value': 'Spectral'}
             ],
-            value='KMeans',
+            value='HDBSCAN',
             inline=True
         )
     ],
@@ -214,10 +215,25 @@ hdbscanhyperparams = dbc.Col([
                 id='metric',
                 options=[
                     {'label': 'euclidean', 'value': 'euclidean'},
-                    {'label': 'cosine', 'value': 'cosine'},
                     {'label': 'manhattan', 'value': 'manhattan'},
                     {'label': 'l1', 'value': 'l1'},
                     {'label': 'l2', 'value': 'l2'},
+                    {'label' : 'braycurtis', 'value':'braycurtis'},
+                    {'label' : 'canberra', 'value':'canberra'},
+                    {'label' : 'chebyshev', 'value':'chebyshev'},
+                    {'label' : 'cityblock', 'value':'cityblock'},
+                    {'label' : 'dice', 'value':'dice'},
+                    {'label' : 'hamming', 'value':'hamming'},
+                    {'label' : 'haversine', 'value':'haversine'},
+                    {'label' : 'infinity', 'value':'infinity'},
+                    {'label' : 'jaccard', 'value':'jaccard'},
+                    {'label' : 'kulsinski', 'value':'kulsinski'},
+                    {'label' : 'mahalanobis', 'value':'mahalanobis'},
+                    {'label' : 'matching', 'value':'matching'},
+                    {'label' : 'minkowski', 'value':'minkowski'},
+                    {'label' : 'rogerstanimoto', 'value':'rogerstanimoto'},
+                    {'label' : 'russellrao', 'value':'russellrao'},
+                  
                 ],
                 value='euclidean',
                 style={'width': '100%'}
