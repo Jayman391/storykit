@@ -27,10 +27,13 @@ from babycenterdb.results import Results
 from frontend.query import form
 from backend.query import build_query
 
+from frontend.stats import stats
+from backend.stats import compute_statistics
+
 from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
-from frontend.sentiment import wordshift, make_img
+from frontend.sentiment import wordshift
 from backend.sentiment import make_daily_sentiments_parallel, generate_wordshift_for_date 
 
 from frontend.chatbot import chatbot
@@ -41,54 +44,68 @@ from backend.topic import fit_topic_model, visualize_documents, visualize_hierar
 
 from datetime import datetime
 
+from dash_extensions.enrich import DashProxy, Output, Input, State, Serverside, html, dcc, ServersideOutputTransform
 
 # Initialize the app
-app = dash.Dash(
-    external_stylesheets=[dbc.themes.BOOTSTRAP]
+app = DashProxy(
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    transforms=[ServersideOutputTransform()]
 )
 
 # Initialize raw_docs as an empty DataFrame
 raw_docs = pd.DataFrame()
 
+navbar = dbc.Navbar(
+    dbc.Container(
+        dbc.NavbarBrand("BabyCenter Dashboard", className="mx-auto")
+    ),
+    color="primary",
+    dark=True,
+    className="mb-4"
+)
+
 app.layout = html.Div([
     # Store components for managing session data
-    dcc.Store(id='raw-docs', storage_type='session'),
-    dcc.Store(id='ngram-data', storage_type='session'),
-    dcc.Store(id='sentiments-data', storage_type='session'),
-    # Removed 'rag-llm' store as RAG is managed server-side
-    # Main container for the layout
-    # Optional: Add a row for the form if needed
-    dbc.Row([
-        dbc.Col(form, style={'marginBottom': '20px', 'width': '100%'}),
-        dbc.Col(
-            dbc.Accordion([
-                dbc.AccordionItem(
-                    children=ngram,      
-                    title="Ngram Analysis",
+    dcc.Store(id='raw-docs', storage_type='memory'),
+    dcc.Store(id='ngram-data', storage_type='memory'),
+    dcc.Store(id='sentiments-data', storage_type='memory'),
+    dcc.Store(id='topics', storage_type='memory'),
+    # Navbar at the top
+    navbar,
+
+    dbc.Container([
+        dbc.Row([
+            dbc.Col(form, width=3),
+            dbc.Col(
+                dbc.Accordion(
+                    [   
+                        dbc.AccordionItem(stats, title="Query Statistics"),
+                        dbc.AccordionItem(ngram, title="Ngram Analysis"),
+                        dbc.AccordionItem(wordshift, title="Sentiment Analysis"),
+                        dbc.AccordionItem(topic, title="Topic Modeling"),
+                        dbc.AccordionItem(chatbot, title="RAG Chatbot"),
+                    ],
+                    start_collapsed=True,
+                    flush=True
                 ),
-                dbc.AccordionItem(
-                    children=wordshift,  
-                    title="Sentiment Analysis",
-                ),
-                dbc.AccordionItem(
-                    children=topic,
-                    title="Topic Modeling",
-                ),
-                dbc.AccordionItem(
-                    children=chatbot,  
-                    title="RAG",
-                ),
-                
-            ], start_collapsed=True),   
-            style={'marginBottom': '20px', 'width': '100%'}, 
-        ),
-    ]),
-])  # Use fluid=True for a full-width container
+                width=9
+            )
+        ], className="mb-4")
+    ], fluid=True),
+
+    dcc.Download(id="download-query-results"),
+    dcc.Download(id="download-ngram-timeseries"),
+    dcc.Download(id="download-topics"),
+    dcc.Download(id="download-documents"),
+    dcc.Download(id="download-hierarchy"),
+    dcc.Download(id="download-heatmap"),
+    dcc.Download(id="download-wordshift"),
+    dcc.Download(id="download-sentiment")
+])
 
 # Callback to control visibility of comment slider and time delta slider
 @app.callback(
     [
-        Output("time-delta-slider-container", "style"),
         Output("comments-slider-container", "style")
     ],
     [Input("post-or-comment", "value")]
@@ -102,9 +119,8 @@ def toggle_sliders(post_or_comment_value):
     comments_style = {"display": "block"} if "post" in post_or_comment_value else {"display": "none"}
 
     # Show the time delta slider if 'comment' is selected
-    time_delta_style = {"display": "block"} if "comment" in post_or_comment_value else {"display": "none"}
 
-    return time_delta_style, comments_style
+    return [comments_style]
 
 @app.callback(
     Output("raw-docs", "data"),
@@ -112,7 +128,6 @@ def toggle_sliders(post_or_comment_value):
     State("date-range", "start_date"),
     State("date-range", "end_date"),
     State("doc-comments-range-slider", "value"),
-    State("time-delta-slider", "value"),
     State("text-input", "value"),
     State("group-input", "value"),
     State("post-or-comment", "value"),
@@ -120,7 +135,7 @@ def toggle_sliders(post_or_comment_value):
 )
 def generate_query(n_clicks,
                    start_date, end_date,
-                   comments_range, time_delta,
+                   comments_range,
                    ngram_keywords, groups,
                    post_or_comment, num_documents):
     """
@@ -136,7 +151,6 @@ def generate_query(n_clicks,
         'start_date': start_date,
         'end_date': end_date,
         'comments_range': comments_range,
-        'time_delta': time_delta,
         'ngram_keywords': ngram_keywords,
         'groups': groups,
         'post_or_comment': post_or_comment,
@@ -149,17 +163,19 @@ def generate_query(n_clicks,
     # Convert results to a dataframe if needed; or directly
     raw_docs_updated = results 
 
+    print(raw_docs_updated)
+
     # Initialize or update the RAG pipeline with new documents
     initialize_global_rag(raw_docs_updated['text'].tolist())
 
-    return results.to_dict('records')
+    return Serverside(results.to_dict('records'))
 
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
     Input("raw-docs", "data")
 )
-def update_ngram_table(data):
+def update_ngram_data(data):
     """
     Update the ngram table with the query results.
     """
@@ -169,7 +185,7 @@ def update_ngram_table(data):
         df = pd.DataFrame.from_records(data)[['text', 'date']]
         records = df.to_dict('records')
         ngrams = compute_ngrams(records, {'keywords': ['all']})
-        return ngrams
+        return Serverside(ngrams)
 
 # Callback to store sentiments separately
 @app.callback(
@@ -235,13 +251,13 @@ def update_wordshift_graph(clickData, ngram_data):
 
         # Convert plot to base64 image
         buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight')
+        fig.savefig(buf, format='svg', bbox_inches='tight')
         buf.seek(0)
         encoded = base64.b64encode(buf.read()).decode('utf-8')
         plt.close(fig)
 
         # Create the image component
-        image = html.Img(src=f"data:image/png;base64,{encoded}", style={'width': '100%'})
+        image = html.Img(src=f"data:image/svg+xml;base64,{encoded}", style={'width': '100%'})
 
         return image
 
@@ -300,28 +316,47 @@ def update_rag_response(n_clicks, question):
     [
         Output("topic-document-graph", "figure"),
         Output("topic-hierarchy-graph", "figure"),
-        Output("heatmap-graph", "figure")
+        Output("heatmap-graph", "figure"),
+        Output("topics", "data"),
     ],
     Input("raw-docs", "data")
 )
 def topic_model(data):
     """
-    Fit a topic model and return the visualization.
+    Fit a topic model and return the visualizations.
     """
+    # If no data is available, do nothing (avoid returning a single {} for 4 outputs)
     if not data:
-        return {}
+        raise dash.exceptions.PreventUpdate
 
-    docs = pd.DataFrame.from_records(data)['text'].tolist()
-    dates = pd.DataFrame.from_records(data)['date'].tolist()
-    dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
-    print(len(dates))
-    print(len(docs))
-    topic_model, _, _ = fit_topic_model(docs)
-    docs = visualize_documents(topic_model, docs)
-    hierarchical_topics = visualize_hierarchy(topic_model)
-    topics_over_time = visualize_heatmap(topic_model)
+    # Convert the stored data into a DataFrame
+    df = pd.DataFrame.from_records(data)
+    if df.empty or 'text' not in df:
+        raise dash.exceptions.PreventUpdate
 
-    return docs, hierarchical_topics, topics_over_time
+    docs = df['text'].tolist()
+    
+    # If your data includes a "date" column, you can optionally parse it:
+    if 'date' in df:
+        dates = df['date'].tolist()
+        try:
+            dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
+        except Exception as e:
+            print("Date parsing error:", e)
+            dates = None
+
+    # Fit the topic model on the documents
+    topic_model_obj, _, _ = fit_topic_model(docs)
+    
+    # Generate the visualizations
+    fig_documents = visualize_documents(topic_model_obj, docs)
+    fig_hierarchy = visualize_hierarchy(topic_model_obj)
+    fig_heatmap = visualize_heatmap(topic_model_obj)
+
+    # Retrieve topics (e.g., a list of topic IDs)
+    topics = topic_model_obj.topics_
+
+    return fig_documents, fig_hierarchy, fig_heatmap, topics
 
 @app.callback(
     Output("ngram-table", "data"),
@@ -357,7 +392,6 @@ def update_ngram_table(data):
     table_data = sorted(table_data, key=lambda x: x['counts'], reverse=True)
     
     return table_data   
-
 
 @app.callback(
     Output("ngram-plot", "figure"),
@@ -421,7 +455,7 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
 
         # Add a new Scatter trace for this ngram
         fig.add_trace(
-            go.scatter.Line(
+            go.Scatter(
                 x=x_vals, 
                 y=y_vals, 
                 mode='lines+markers',
@@ -438,6 +472,162 @@ def update_ngram_plot(ngram_data, table_data, selected_rows):
 
     return fig
 
+@app.callback(
+    Output("document-stats", "data"),
+    Input("raw-docs", "data")
+)
+def update_document_stats(data):
+    """
+    Update the document stats table with the query results.
+    """
+    if data is None:
+        return []
+    
+    df = pd.DataFrame.from_records(data)
+    stats = compute_statistics(df)
+    
+    return stats
+
+# ======================
+# DOWNLOAD CALLBACKS
+# ======================
+
+#0. Download the query results
+@app.callback(
+    Output("download-query-results", "data"),
+    Input("download-query-button", "n_clicks"),
+    State("raw-docs", "data"),
+    prevent_initial_call=True
+)
+def download_query_results(n_clicks, data):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    df = pd.DataFrame.from_records(data)
+    return dcc.send_data_frame(df.to_csv, "query_results.csv")
+
+# 1. Download the ngram timeseries (from the ngram-plot)
+@app.callback(
+    Output("download-ngram-timeseries", "data"),
+    Input("download-timeseries-button", "n_clicks"),
+    State("ngram-plot", "figure"),
+    prevent_initial_call=True
+)
+def download_ngram_timeseries(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "ngram_timeseries.svg")
+
+@app.callback(
+    Output("download-topics", "data"),
+    Input("download-topics-button", "n_clicks"),
+    State("topics", "data"),
+    prevent_initial_call=True
+)
+def download_topics(n_clicks, topics):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    return dcc.send_data_frame(pd.DataFrame(topics).to_csv, "topics.csv")
+
+# 3. Download the Topic Documents plot
+@app.callback(
+    Output("download-documents", "data"),
+    Input("download-documents-button", "n_clicks"),
+    State("topic-document-graph", "figure"),
+    prevent_initial_call=True
+)
+def download_topic_documents(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "topic_documents.svg")
+
+
+# 4. Download the Topic Hierarchy plot
+@app.callback(
+    Output("download-hierarchy", "data"),
+    Input("download-hierarchy-button", "n_clicks"),
+    State("topic-hierarchy-graph", "figure"),
+    prevent_initial_call=True
+)
+def download_topic_hierarchy(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "topic_hierarchy.svg")
+
+
+# 5. Download the Heatmap plot
+@app.callback(
+    Output("download-heatmap", "data"),
+    Input("download-heatmap-button", "n_clicks"),
+    State("heatmap-graph", "figure"),
+    prevent_initial_call=True
+)
+def download_heatmap(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "heatmap.svg")
+
+
+# 6. Download the Wordshift plot
+@app.callback(
+    Output("download-wordshift", "data"),
+    Input("download-wordshift-button", "n_clicks"),
+    State("sentiment-plot", "clickData"),
+    State("ngram-data", "data"),
+    prevent_initial_call=True
+)
+def download_wordshift(n_clicks, clickData, ngram_data):
+    if not clickData or not ngram_data:
+        raise dash.exceptions.PreventUpdate
+    try:
+        selected_date = clickData['points'][0]['x']
+        selected_date = format_date(str(selected_date))
+        shift = generate_wordshift_for_date(selected_date, ngram_data.get('dates', {}))
+        if shift is None:
+            raise dash.exceptions.PreventUpdate
+        shift.plot()
+        fig = plt.gcf()
+        fig.tight_layout()
+        buf = BytesIO()
+        fig.savefig(buf, format='svg', bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)
+        return dcc.send_bytes(buf.getvalue(), "wordshift.svg")
+    except Exception as e:
+        print(f"Error downloading wordshift graph: {e}")
+        raise dash.exceptions.PreventUpdate
+
+
+# 7. Download the Sentiment Timeseries plot
+@app.callback(
+    Output("download-sentiment", "data"),
+    Input("download-sentiment-button", "n_clicks"),
+    State("sentiment-plot", "figure"),
+    prevent_initial_call=True
+)
+def download_sentiment_timeseries(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "sentiment_timeseries.svg")
 
 def format_date(date_str):
     # Parse the input date string

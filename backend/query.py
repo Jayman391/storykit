@@ -21,8 +21,6 @@ def build_query(params : dict) -> pd.DataFrame:
     comment_filters.append(babycenterdb.filter.DateFilter(floor=datetime.strptime(params['start_date'], '%Y-%m-%d'), ceiling=datetime.strptime(params['end_date'], '%Y-%m-%d')))
   if params['comments_range']:
     post_filters.append(babycenterdb.filter.NumCommentsFilter(floor=params['comments_range'][0], ceiling=params['comments_range'][1]))
-  if params['time_delta']:
-    comment_filters.append(babycenterdb.filter.TimeDeltaFilter(floor=params['time_delta'][0], ceiling=params['time_delta'][1]))
   if params['ngram_keywords']:
     post_filters.append(babycenterdb.filter.TextFilter(value_list=params['ngram_keywords'].split(',')))
     comment_filters.append(babycenterdb.filter.TextFilter(value_list=params['ngram_keywords'].split(',')))
@@ -33,18 +31,35 @@ def build_query(params : dict) -> pd.DataFrame:
   post_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
   comment_filters.append(babycenterdb.filter.CountryFilter(value_list=['USA']))
 
-  posts_query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
-  comments_query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
+  if len(params['post_or_comment']) == 2:
+    posts_query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
+    comments_query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
 
-  posts_df = posts_query.documents
-  comments_df = comments_query.documents
-  # Concatenate DataFrames
-  combined_df = pd.concat([posts_df, comments_df], ignore_index=True)
-  
-  # Convert ObjectId to String
-  if '_id' in combined_df.columns:
-      combined_df['_id'] = combined_df['_id'].astype(str)
-  
-  return combined_df  
+    posts_df = posts_query.documents
+    posts_df['type'] = 'post'
+    comments_df = comments_query.documents
+    comments_df['type'] = 'comment'
 
+    # Concatenate DataFrames
+    combined_df = pd.concat([posts_df, comments_df], ignore_index=True)
+    
+    # Convert ObjectId to String
+    if '_id' in combined_df.columns:
+        combined_df['_id'] = combined_df['_id'].astype(str) 
+    return combined_df  
+  if params['post_or_comment'][0] == 'post':
+    print("made it here")
+    query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
+    df = query.documents
+    df['type'] = 'post'
+    if '_id' in df.columns:
+        df['_id'] = df['_id'].astype(str) 
+    return df
+  if params['post_or_comment'][0] == 'comment':
+    query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
+    df = query.documents
+    df['type'] = 'comment'
+    if '_id' in df.columns:
+        df['_id'] = df['_id'].astype(str)
+    return df
     
