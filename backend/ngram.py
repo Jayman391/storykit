@@ -82,9 +82,9 @@ def compute_ngrams(data: list, params: dict) -> dict:
     for date_str in dates:
         for n in dates[date_str]:
             counts = dates[date_str][n]
-            for ngram in list(counts.keys()):
-                if counts[ngram] < 3:
-                    del counts[ngram]
+            for ngram, count in list(counts['counts'].items()):
+                if count < 3:
+                    del counts['counts'][ngram]
 
     # Compute ranks for the full corpus
     for n in full_corpus:
@@ -106,9 +106,9 @@ def compute_ngrams(data: list, params: dict) -> dict:
     # delete ngrams with counts less than 3
     for n in full_corpus:
         counts = full_corpus[n]
-        for ngram in list(counts.keys()):
-            if counts[ngram] < 3:
-                del counts[ngram]
+        for ngram, count in list(counts['counts'].items()):
+                if count < 3:
+                    del counts['counts'][ngram]
 
     return {'dates': dates, 'full_corpus': full_corpus}
 

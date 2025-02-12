@@ -22,11 +22,11 @@ gramradio = dbc.Col(
         dbc.RadioItems(
             id='gram-radio',
             options=[
-                {'label': '1-gram', 'value': 'unigram'},
-                {'label': '2-gram', 'value': 'bigram'},
-                {'label': '3-gram', 'value': 'trigram'}
+                {'label': '1-gram', 'value': 1},
+                {'label': '2-gram', 'value': 2},
+                {'label': '3-gram', 'value': 3}
             ],
-            value='unigram',
+            value=1,
             inline=True
         ),
     ],
