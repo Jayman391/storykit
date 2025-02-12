@@ -122,6 +122,22 @@ embeddingmodel = dbc.Col(
     className="mb-3"
 )
 
+quantizeembeddings = dbc.Col(
+    [
+        dbc.Label('Quantize Embeddings?'),
+        dbc.RadioItems(
+            id='quantize-radio',
+            options=[
+                {'label': 'Yes', 'value': True},
+                {'label': 'No', 'value': False}
+            ],
+            value=True,
+            inline=True
+        )
+    ],
+    className="mb-3"
+)
+
 dimredradio = dbc.Col(
     [
         dbc.Label('Select Dimensionality Reduction Technique'),
@@ -293,6 +309,7 @@ topicform = dbc.Card(
             dbc.Form(
                 [
                     embeddingmodel,
+                    quantizeembeddings,
                     dimredradio,
                     dimreddims,
                     umapmetric,

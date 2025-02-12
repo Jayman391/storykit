@@ -452,6 +452,7 @@ def update_rag_response(n_clicks, question):
     ],
     Input("submit-topic-config", "n_clicks"),
     State("embedding-model", "value"),
+    State("quantize-radio", "value"),
     State("dimred-radio", "value"),
     State("dimred-dims", "value"),
     State("cluster-radio", "value"),
@@ -462,7 +463,7 @@ def update_rag_response(n_clicks, question):
     State("dimred-metric", "value"),
     State("raw-docs", "data")
 )
-def topic_model(n_clicks, modelname, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, cluster_metric,dimred_metric, data):
+def topic_model(n_clicks, modelname,quantize, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, cluster_metric,dimred_metric, data):
     """
     Fit a topic model and return the visualizations.
     """
@@ -493,7 +494,7 @@ def topic_model(n_clicks, modelname, dimredradio, dimreddims, clusterradio, n_cl
       
 
     # Fit the topic model on the documents
-    topic_model_obj, _, _ = fit_topic_model(docs, modelname=modelname, dimredparams={'dimred_radio': dimredradio, 'dimred_dims': dimreddims,'dimred_metric':dimred_metric}, clusterparams={'cluster_radio': clusterradio, 'n_clusters': n_clusters, 'min_cluster_size': min_cluster_size, 'min_samples': min_samples, 'cluster_metric': cluster_metric})
+    topic_model_obj, _, _ = fit_topic_model(docs, modelname=modelname, dimredparams={'dimred_radio': dimredradio, 'dimred_dims': dimreddims,'dimred_metric':dimred_metric}, clusterparams={'cluster_radio': clusterradio, 'n_clusters': n_clusters, 'min_cluster_size': min_cluster_size, 'min_samples': min_samples, 'cluster_metric': cluster_metric}, quantize=quantize)
     
     # Generate the visualizations
     fig_documents = visualize_documents(topic_model_obj, docs)

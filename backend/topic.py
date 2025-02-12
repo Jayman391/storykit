@@ -9,10 +9,13 @@ from sklearn.cluster import SpectralClustering
 from sklearn.decomposition import PCA
 from umap import UMAP
 
-def fit_topic_model(docs, modelname, dimredparams, clusterparams):
+def fit_topic_model(docs, modelname, dimredparams, clusterparams, quantize):
   reducer = initialize_reducer(dimredparams)
   clusterer = initialize_clusterer(clusterparams)
-  topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=SentenceTransformer(modelname), nr_topics='auto', umap_model=reducer, hdbscan_model=clusterer)
+  if quantize:
+    topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=SentenceTransformer(modelname, model_kwargs={"torch_dtype": "float16"}), nr_topics='auto', umap_model=reducer, hdbscan_model=clusterer)
+  else:
+    topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=SentenceTransformer(modelname), nr_topics='auto', umap_model=reducer, hdbscan_model=clusterer)
 
   topics, probs = topic_model.fit_transform(docs)
   return topic_model, topics, probs
