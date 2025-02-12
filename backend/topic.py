@@ -2,12 +2,35 @@ from bertopic import BERTopic
 from plotly.graph_objs import Figure
 from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+from hdbscan import HDBSCAN
+from sklearn.cluster import KMeans
+from sklearn.cluster import SpectralClustering
 
-def fit_topic_model(docs):
-  topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=model)#, nr_topics='auto'
+from sklearn.decomposition import PCA
+from umap import UMAP
+
+def fit_topic_model(docs, modelname, dimredparams, clusterparams):
+  reducer = initialize_reducer(dimredparams)
+  clusterer = initialize_clusterer(clusterparams)
+  topic_model = BERTopic(verbose=True, low_memory=True, calculate_probabilities=False, embedding_model=SentenceTransformer(modelname), nr_topics='auto', umap_model=reducer, hdbscan_model=clusterer)
   topics, probs = topic_model.fit_transform(docs)
   return topic_model, topics, probs
+
+def initialize_clusterer(params : dict):
+  if params['cluster_radio'] == 'HDBSCAN':
+    clusterer = HDBSCAN(min_cluster_size=params['min_cluster_size'], min_samples=params['min_samples'], metric=params['metric'])
+  elif params['cluster_radio'] == 'KMeans':
+    clusterer = KMeans(n_clusters=params['n_clusters'])
+  else:
+    clusterer = SpectralClustering(n_clusters=params['n_clusters'])
+  return clusterer
+
+def initialize_reducer(params : dict):
+  if params['dimred_radio'] == 'UMAP':
+    reducer = UMAP(n_components=params['dimred_dims'])
+  else:
+    reducer = PCA(n_components=params['dimred_dims'])
+  return reducer
 
 def visualize_documents(topic_model : BERTopic, docs) -> Figure:
   return topic_model.visualize_documents(docs)

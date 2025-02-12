@@ -181,6 +181,51 @@ numclusters = dbc.Col(
     className="mb-3"
 )
 
+hdbscanhyperparams = dbc.Col([
+    dbc.Label('HDBSCAN Hyperparameters (Ignore for KMeans and Spectral Clustering)'),
+    dbc.Row([
+        dbc.Col([
+            dbc.Label('Minimum Cluster Size'),
+            dcc.Input(
+                id='min-cluster-size',
+                type='number',
+                placeholder=2,
+                min=2,
+                step=1,
+                value=2,
+                style={'width': '100%'}
+            )
+        ]),
+        dbc.Col([
+            dbc.Label('Minimum Samples'),
+            dcc.Input(
+                id='min-samples',
+                type='number',
+                placeholder=2,
+                min=2,
+                step=1,
+                value=2,
+                style={'width': '100%'}
+            )
+        ]),
+        dbc.Col([
+            dbc.Label('Metric'),
+            dcc.Dropdown(
+                id='metric',
+                options=[
+                    {'label': 'euclidean', 'value': 'euclidean'},
+                    {'label': 'cosine', 'value': 'cosine'},
+                    {'label': 'manhattan', 'value': 'manhattan'},
+                    {'label': 'l1', 'value': 'l1'},
+                    {'label': 'l2', 'value': 'l2'},
+                ],
+                value='euclidean',
+                style={'width': '100%'}
+            )
+        ])
+        ],className="mb-3")
+])
+
 topicform = dbc.Card(
     [
         dbc.CardHeader("Topic Modeling"),
@@ -192,6 +237,7 @@ topicform = dbc.Card(
                     dimreddims,
                     clusterradio,
                     numclusters,
+                    hdbscanhyperparams,
                     dbc.Row(
                         dbc.Col(
                             dbc.Button("Submit", id="submit-topic-config", color="primary"),
