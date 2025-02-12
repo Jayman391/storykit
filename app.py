@@ -24,7 +24,7 @@ import shifterator as sh
 
 from babycenterdb.results import Results
 
-from frontend.query import form
+from frontend.query import queryform
 from backend.query import build_query
 
 from frontend.stats import stats
@@ -41,6 +41,8 @@ from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
 from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap
+
+from frontend.config import configforms
 
 from datetime import datetime
 
@@ -75,7 +77,7 @@ app.layout = html.Div([
 
     dbc.Container([
         dbc.Row([
-            dbc.Col(form, width=3),
+            dbc.Col([queryform, configforms], width=3),
             dbc.Col(
                 dbc.Accordion(
                     [   
@@ -103,24 +105,6 @@ app.layout = html.Div([
     dcc.Download(id="download-sentiment")
 ])
 
-# Callback to control visibility of comment slider and time delta slider
-@app.callback(
-    [
-        Output("comments-slider-container", "style")
-    ],
-    [Input("post-or-comment", "value")]
-)
-def toggle_sliders(post_or_comment_value):
-    """
-    Toggle visibility of 'time-delta-slider-container' and 'comments-slider-container'
-    based on the selected values in 'post-or-comment' checklist.
-    """
-    # Show the comment slider if 'post' is selected
-    comments_style = {"display": "block"} if "post" in post_or_comment_value else {"display": "none"}
-
-    # Show the time delta slider if 'comment' is selected
-
-    return [comments_style]
 
 @app.callback(
     Output("raw-docs", "data"),
@@ -173,9 +157,12 @@ def generate_query(n_clicks,
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
-    Input("raw-docs", "data")
+    Input("submit-ngram-config", "n_clicks"),
+    State("gram-radio", "value"),
+    State("raw-docs", "data")
 )
-def update_ngram_data(data):
+def update_ngram_data(n_clicks, n_grams, data):
+
     """
     Update the ngram table with the query results.
     """
@@ -184,22 +171,139 @@ def update_ngram_data(data):
     else:
         df = pd.DataFrame.from_records(data)[['text', 'date']]
         records = df.to_dict('records')
-        ngrams = compute_ngrams(records, {'keywords': ['all']})
+        ngrams = compute_ngrams(records, {'n': n_grams})
         return Serverside(ngrams)
+@app.callback(
+    Output("ngram-table", "data"),
+    Input("ngram-data", "data")
+)
+def update_ngram_table(data):
+    """
+    Update the ngram table with the query results.
+    """
+    if data is None:
+        return []
+    
+    full_corpus = data.get('full_corpus', {})
+    
+    table_data = []
+    # full_corpus has structure: {"1-gram": {counts: {...}, ranks: {...}}, "2-gram": {...}, ...}
+    for ngram_size, info_dict in full_corpus.items():
+        counts_dict = info_dict.get('counts', {})
+        ranks_dict  = info_dict.get('ranks', {})
+        
+        for ngram_text, count_val in counts_dict.items():
+            rank_val = ranks_dict.get(ngram_text, None)
+            # Create a row for the DataTable
+            row = { 
+                'ngram': ngram_text,   
+                'counts': count_val,   
+                'ranks': rank_val      
+            }
+            table_data.append(row)
+    
+    # Sort or manipulate as needed
+    # For instance, you might want to sort the table by descending counts:
+    table_data = sorted(table_data, key=lambda x: x['counts'], reverse=True)
+    
+    return table_data   
 
+@app.callback(
+    Output("ngram-plot", "figure"),
+    [
+        Input("ngram-data", "data"),
+        Input("ngram-table", "data"),         # The full table data
+        Input("ngram-table", "selected_rows") # Which rows are selected
+    ],
+        State("smoothing-slider", "value"),
+)
+def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
+    """
+    Update the ngram plot with the time series of RANKS for each selected ngram.
+    The user can hide/deselect each trace by clicking it in the legend.
+    """
+    # If there's no ngram_data yet, return an empty figure
+    if not ngram_data:
+        return go.Figure()
+
+    dates_dict = ngram_data.get('dates', {})
+    
+    # Create a blank figure
+    fig = go.Figure()
+
+    # If nothing is selected, just show a blank figure
+    if not selected_rows:
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Rank",
+            yaxis=dict(autorange="reversed")  # Ranks: 1 is at the top
+        )
+        return fig
+    
+    # For each selected row index, grab its corresponding row data
+    for row_idx in selected_rows:
+        row_data = table_data[row_idx]
+        ngram_text = row_data['ngram']
+
+        x_vals = []
+        y_vals = []
+
+        # Sort dates so lines go from earliest to latest
+        sorted_dates = list(dates_dict.keys())
+        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
+
+        # For each date, see if that ngram appears and gather its rank
+        for date_str in sorted_dates:
+            # date_str => something like "Mon, 20 Apr 2020 00:00:00"
+            # date_obj => {"1-gram": {...}, "2-gram": {...}, ...}
+            date_obj = dates_dict[date_str]
+
+            # We don't know which n-gram size the user clicked, so search them all
+            found = False
+            for ngram_size, size_info in date_obj.items():
+                rank_dict = size_info.get('ranks', {})
+                if ngram_text in rank_dict:
+                    x_vals.append(date_str)
+                    y_vals.append(rank_dict[ngram_text])
+                    found = True
+                    break
+            # If the ngram wasn't found for a given date, it's simply not plotted for that date
+
+        # Smooth the data using a rolling average
+        y_vals = np.round(np.convolve(y_vals, np.ones(smoothing_window) / smoothing_window, mode='same'))
+        # Add a new Scatter trace for this ngram
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals, 
+                y=y_vals, 
+                mode='lines+markers',
+                name=ngram_text
+            )
+        )
+
+    # Invert y-axis so rank #1 is at the top
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Rank",
+        yaxis=dict(autorange="reversed")
+    )
+
+    return fig
 # Callback to store sentiments separately
 @app.callback(
     Output("sentiments-data", "data"),
-    Input("ngram-data", "data")
+    Input("submit-sentiment-config", "n_clicks"),
+    State("ngram-data", "data"),
+    State("window-slider", "value")
 )
-def update_sentiments(data):
+def update_sentiments(clicks, data, smoothing):
     """
     Compute and store sentiments based on ngram data.
     """
     if not data:
         return {}
     else:
-        sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
+        sentiments = make_daily_sentiments_parallel(data.get('dates', {}), smoothing)
         return sentiments
 
 # Callback to update the sentiment plot with chronological dates
@@ -358,119 +462,6 @@ def topic_model(data):
 
     return fig_documents, fig_hierarchy, fig_heatmap, topics
 
-@app.callback(
-    Output("ngram-table", "data"),
-    Input("ngram-data", "data")
-)
-def update_ngram_table(data):
-    """
-    Update the ngram table with the query results.
-    """
-    if data is None:
-        return []
-    
-    full_corpus = data.get('full_corpus', {})
-    
-    table_data = []
-    # full_corpus has structure: {"1-gram": {counts: {...}, ranks: {...}}, "2-gram": {...}, ...}
-    for ngram_size, info_dict in full_corpus.items():
-        counts_dict = info_dict.get('counts', {})
-        ranks_dict  = info_dict.get('ranks', {})
-        
-        for ngram_text, count_val in counts_dict.items():
-            rank_val = ranks_dict.get(ngram_text, None)
-            # Create a row for the DataTable
-            row = { 
-                'ngram': ngram_text,   
-                'counts': count_val,   
-                'ranks': rank_val      
-            }
-            table_data.append(row)
-    
-    # Sort or manipulate as needed
-    # For instance, you might want to sort the table by descending counts:
-    table_data = sorted(table_data, key=lambda x: x['counts'], reverse=True)
-    
-    return table_data   
-
-@app.callback(
-    Output("ngram-plot", "figure"),
-    [
-        Input("ngram-data", "data"),
-        Input("ngram-table", "data"),         # The full table data
-        Input("ngram-table", "selected_rows") # Which rows are selected
-    ]
-)
-def update_ngram_plot(ngram_data, table_data, selected_rows):
-    """
-    Update the ngram plot with the time series of RANKS for each selected ngram.
-    The user can hide/deselect each trace by clicking it in the legend.
-    """
-    # If there's no ngram_data yet, return an empty figure
-    if not ngram_data:
-        return go.Figure()
-
-    dates_dict = ngram_data.get('dates', {})
-    
-    # Create a blank figure
-    fig = go.Figure()
-
-    # If nothing is selected, just show a blank figure
-    if not selected_rows:
-        fig.update_layout(
-            xaxis_title="Date",
-            yaxis_title="Rank",
-            yaxis=dict(autorange="reversed")  # Ranks: 1 is at the top
-        )
-        return fig
-    
-    # For each selected row index, grab its corresponding row data
-    for row_idx in selected_rows:
-        row_data = table_data[row_idx]
-        ngram_text = row_data['ngram']
-
-        x_vals = []
-        y_vals = []
-
-        # Sort dates so lines go from earliest to latest
-        sorted_dates = list(dates_dict.keys())
-        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
-
-        # For each date, see if that ngram appears and gather its rank
-        for date_str in sorted_dates:
-            # date_str => something like "Mon, 20 Apr 2020 00:00:00"
-            # date_obj => {"1-gram": {...}, "2-gram": {...}, ...}
-            date_obj = dates_dict[date_str]
-
-            # We don't know which n-gram size the user clicked, so search them all
-            found = False
-            for ngram_size, size_info in date_obj.items():
-                rank_dict = size_info.get('ranks', {})
-                if ngram_text in rank_dict:
-                    x_vals.append(date_str)
-                    y_vals.append(rank_dict[ngram_text])
-                    found = True
-                    break
-            # If the ngram wasn't found for a given date, it's simply not plotted for that date
-
-        # Add a new Scatter trace for this ngram
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals, 
-                y=y_vals, 
-                mode='lines+markers',
-                name=ngram_text
-            )
-        )
-
-    # Invert y-axis so rank #1 is at the top
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Rank",
-        yaxis=dict(autorange="reversed")
-    )
-
-    return fig
 
 @app.callback(
     Output("document-stats", "data"),
