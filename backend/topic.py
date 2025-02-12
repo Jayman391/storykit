@@ -19,7 +19,7 @@ def fit_topic_model(docs, modelname, dimredparams, clusterparams):
 
 def initialize_clusterer(params : dict):
   if params['cluster_radio'] == 'HDBSCAN':
-    clusterer = HDBSCAN(min_cluster_size=params['min_cluster_size'], min_samples=params['min_samples'], metric=params['metric'])
+    clusterer = HDBSCAN(min_cluster_size=params['min_cluster_size'], min_samples=params['min_samples'], metric=params['cluster_metric'])
   elif params['cluster_radio'] == 'KMeans':
     clusterer = KMeans(n_clusters=params['n_clusters'])
   else:
@@ -28,7 +28,7 @@ def initialize_clusterer(params : dict):
 
 def initialize_reducer(params : dict):
   if params['dimred_radio'] == 'UMAP':
-    reducer = UMAP(n_components=params['dimred_dims'])
+    reducer = UMAP(n_components=params['dimred_dims'], metric=params['dimred_metric'])
   else:
     reducer = PCA(n_components=params['dimred_dims'])
   return reducer

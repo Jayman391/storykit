@@ -153,6 +153,28 @@ dimreddims = dbc.Col(
     className="mb-3"
 )
 
+umapmetric = dbc.Col(
+    [
+        dbc.Label('UMAP Distance Metric'),
+        dcc.Dropdown(
+            id='dimred-metric',
+            options=[
+                {'label': 'euclidean', 'value': 'euclidean'},
+                {'label': 'cosine', 'value': 'cosine'},
+                {'label': 'manhattan', 'value': 'manhattan'},
+                {'label' : 'braycurtis', 'value':'braycurtis'},
+                {'label' : 'canberra', 'value':'canberra'},
+                {'label' : 'hamming', 'value':'hamming'},
+                {'label' : 'haversine', 'value':'haversine'},
+                {'label' : 'jaccard', 'value':'jaccard'},
+            ],
+            value='euclidean',
+            style={'width': '100%'}
+        )
+    ],
+)
+
+
 clusterradio = dbc.Col(
     [
         dbc.Label('Select Clustering Algorithm'),
@@ -215,9 +237,9 @@ hdbscanhyperparams = dbc.Col([
         ]),
     ],className="mb-3"),
     dbc.Row([
-        dbc.Label('Metric'),
+        dbc.Label('HDBSCAN Metric'),
         dcc.Dropdown(
-            id='metric',
+            id='cluster-metric',
             options=[
                 {'label': 'euclidean', 'value': 'euclidean'},
                 {'label': 'manhattan', 'value': 'manhattan'},
@@ -255,6 +277,7 @@ topicform = dbc.Card(
                     embeddingmodel,
                     dimredradio,
                     dimreddims,
+                    umapmetric,
                     clusterradio,
                     numclusters,
                     hdbscanhyperparams,
