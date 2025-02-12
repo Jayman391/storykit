@@ -110,7 +110,7 @@ sentimentform = dbc.Card(
 
 embeddingmodel = dbc.Col(
     [
-        dbc.Label('Select Sentence Transformers Embedding Model'),
+        dbc.Label('Select Sentence Transformers Embedding Model \n'),
         dcc.Link('Sentence Transformers Models', href='https://huggingface.co/models?sort=trending&search=sentence-transformers', target="_blank"),
         dcc.Textarea(
             id='embedding-model',
