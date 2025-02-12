@@ -290,6 +290,8 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
             go.Scatter(
                 x=x_vals, 
                 y=y_vals, 
+                dx=1,
+                dy=1,
                 mode='lines+markers',
                 name=ngram_text
             )

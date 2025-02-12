@@ -41,6 +41,8 @@ smoothingslider = dbc.Col(
             min=1,
             max=20,
             value=1,
+            step=1,
+            marks={1:'1',20:'20'},
             tooltip={'placement': 'bottom', 'always_visible': True}
         )
     ],
@@ -76,6 +78,8 @@ windowslider = dbc.Col(
             min=1,
             max=20,
             value=1,
+            step=1,
+            marks={1:'1',20:'20'},
             tooltip={'placement': 'bottom', 'always_visible': True}
         )
     ],
@@ -186,7 +190,7 @@ hdbscanhyperparams = dbc.Col([
     dbc.Label('HDBSCAN Hyperparameters (Ignore for KMeans and Spectral Clustering)'),
     dbc.Row([
         dbc.Col([
-            dbc.Label('Minimum Cluster Size'),
+            dbc.Label('Min Cluster Size'),
             dcc.Input(
                 id='min-cluster-size',
                 type='number',
@@ -198,7 +202,7 @@ hdbscanhyperparams = dbc.Col([
             )
         ]),
         dbc.Col([
-            dbc.Label('Minimum Samples'),
+            dbc.Label('Min Samples'),
             dcc.Input(
                 id='min-samples',
                 type='number',
@@ -209,37 +213,37 @@ hdbscanhyperparams = dbc.Col([
                 style={'width': '100%'}
             )
         ]),
-        dbc.Col([
-            dbc.Label('Metric'),
-            dcc.Dropdown(
-                id='metric',
-                options=[
-                    {'label': 'euclidean', 'value': 'euclidean'},
-                    {'label': 'manhattan', 'value': 'manhattan'},
-                    {'label': 'l1', 'value': 'l1'},
-                    {'label': 'l2', 'value': 'l2'},
-                    {'label' : 'braycurtis', 'value':'braycurtis'},
-                    {'label' : 'canberra', 'value':'canberra'},
-                    {'label' : 'chebyshev', 'value':'chebyshev'},
-                    {'label' : 'cityblock', 'value':'cityblock'},
-                    {'label' : 'dice', 'value':'dice'},
-                    {'label' : 'hamming', 'value':'hamming'},
-                    {'label' : 'haversine', 'value':'haversine'},
-                    {'label' : 'infinity', 'value':'infinity'},
-                    {'label' : 'jaccard', 'value':'jaccard'},
-                    {'label' : 'kulsinski', 'value':'kulsinski'},
-                    {'label' : 'mahalanobis', 'value':'mahalanobis'},
-                    {'label' : 'matching', 'value':'matching'},
-                    {'label' : 'minkowski', 'value':'minkowski'},
-                    {'label' : 'rogerstanimoto', 'value':'rogerstanimoto'},
-                    {'label' : 'russellrao', 'value':'russellrao'},
-                  
-                ],
-                value='euclidean',
-                style={'width': '100%'}
-            )
-        ])
-        ],className="mb-3")
+    ],className="mb-3"),
+    dbc.Row([
+        dbc.Label('Metric'),
+        dcc.Dropdown(
+            id='metric',
+            options=[
+                {'label': 'euclidean', 'value': 'euclidean'},
+                {'label': 'manhattan', 'value': 'manhattan'},
+                {'label': 'l1', 'value': 'l1'},
+                {'label': 'l2', 'value': 'l2'},
+                {'label' : 'braycurtis', 'value':'braycurtis'},
+                {'label' : 'canberra', 'value':'canberra'},
+                {'label' : 'chebyshev', 'value':'chebyshev'},
+                {'label' : 'cityblock', 'value':'cityblock'},
+                {'label' : 'dice', 'value':'dice'},
+                {'label' : 'hamming', 'value':'hamming'},
+                {'label' : 'haversine', 'value':'haversine'},
+                {'label' : 'infinity', 'value':'infinity'},
+                {'label' : 'jaccard', 'value':'jaccard'},
+                {'label' : 'kulsinski', 'value':'kulsinski'},
+                {'label' : 'mahalanobis', 'value':'mahalanobis'},
+                {'label' : 'matching', 'value':'matching'},
+                {'label' : 'minkowski', 'value':'minkowski'},
+                {'label' : 'rogerstanimoto', 'value':'rogerstanimoto'},
+                {'label' : 'russellrao', 'value':'russellrao'},
+                
+            ],
+            value='euclidean',
+            style={'width': '100%'}
+        )
+    ]),
 ])
 
 topicform = dbc.Card(
