@@ -103,7 +103,9 @@ app.layout = html.Div([
     dcc.Download(id="download-heatmap"),
     dcc.Download(id="topics-over-time"),
     dcc.Download(id="download-wordshift"),
-    dcc.Download(id="download-sentiment")
+    dcc.Download(id="download-sentiment"),
+    # placeholder for rag callback
+    dcc.Download(id='rag-placeholder')
 ])
 
 
@@ -154,13 +156,22 @@ def generate_query(n_clicks,
     # Build and run the query
     results = build_query(params)
 
-    # Convert results to a dataframe if needed; or directly
-    raw_docs_updated = results 
-
     # Initialize or update the RAG pipeline with new documents
-    initialize_global_rag(raw_docs_updated['text'].tolist())
-
     return Serverside(results.to_dict('records'))
+
+class Placeholder:
+    def __init__():
+        pass
+    
+@app.callback(
+        Output('rag-placeholder', 'data'),
+        Input("raw-docs", "data")
+)
+def init_rag(docs):
+    initialize_global_rag(pd.DataFrame.from_dict(docs)['text'].tolist())
+
+    return Placeholder()
+
 
 @app.callback(
     Output("document-stats", "data"),
@@ -463,7 +474,7 @@ def update_rag_response(n_clicks, question):
     State("dimred-metric", "value"),
     State("raw-docs", "data")
 )
-def topic_model(n_clicks, modelname,quantize, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, cluster_metric,dimred_metric, data):
+def topic_model(n_clicks, modelname, quantize, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, cluster_metric,dimred_metric, data):
     """
     Fit a topic model and return the visualizations.
     """
