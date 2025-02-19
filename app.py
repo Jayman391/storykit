@@ -162,7 +162,7 @@ def generate_query(n_clicks,
 class Placeholder:
     def __init__():
         pass
-    
+
 @app.callback(
         Output('rag-placeholder', 'data'),
         Input("raw-docs", "data")
@@ -713,4 +713,4 @@ def toggle_clustering_options(selected_cluster):
          return {'display': 'none'}, {'display': 'none'}
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, host='0.0.0.0')
