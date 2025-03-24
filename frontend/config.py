@@ -124,15 +124,15 @@ embeddingmodel = dbc.Col(
 
 quantizeembeddings = dbc.Col(
     [
-        dbc.Label('Quantize Embeddings?'),
+        dbc.Label('Quantize Embeddings? (GPU Only)'),
         dbc.RadioItems(
             id='quantize-radio',
             options=[
                 {'label': 'Yes', 'value': True},
                 {'label': 'No', 'value': False}
             ],
-            value=True,
-            inline=True
+            value=False,
+            inline=False
         )
     ],
     className="mb-3"
@@ -301,6 +301,7 @@ hdbscanhyperparams = dbc.Col(
     id='hdbscan-container',
     className="mb-3"
 )
+
 
 topicform = dbc.Card(
     [
