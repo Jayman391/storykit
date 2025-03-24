@@ -159,9 +159,6 @@ def generate_query(n_clicks,
     # Initialize or update the RAG pipeline with new documents
     return Serverside(results.to_dict('records'))
 
-class Placeholder:
-    def __init__():
-        pass
 
 @app.callback(
         Output('rag-placeholder', 'data'),
@@ -170,7 +167,7 @@ class Placeholder:
 def init_rag(docs):
     initialize_global_rag(pd.DataFrame.from_dict(docs)['text'].tolist())
 
-    return Placeholder()
+    return docs
 
 
 @app.callback(
