@@ -7,6 +7,51 @@ This dashboard allows users to update a query form, submit queries to the BabyCe
 3. **Topic Modeling**  
 4. **Retrieval Augmented Generation (RAG)**  
 
+
+## Setup
+
+To use this app, you need to have python3.11, be on the UVM VPN, and have access to the Computational Story Lab Gitlab Organization.
+
+First, clone this project into your working directory
+
+```
+git clone git@github.com:Jayman391/storykit.git
+```
+
+Next, we need to clone the BabyCenterDB Package and build the current distribution. https://gitlab.com/compstorylab/babycenterdb    
+
+```
+git clone git@gitlab.com:compstorylab/babycenterdb.git
+```
+
+Read the documentation for babycenterdb on how to build the package.
+
+After the package is built, change to the storykit directory, create a virtual environment, install the babycenterdb package, and then install the rest of the dependencies
+
+```
+cd storykit
+python3.11 -m venv venv
+source venv/bin/activate
+pip install ../<path to BabyCenterDB package>/babycenterdb/dist/babycenterdb-0.1.0-py3-none-any.whl
+pip install -r requirements.txt
+```
+
+Finally, we need to modify the shifterator packages source code to work with python 3.11 
+
+```
+python monkeypatch_shifterator.py
+```
+
+If you want to enable RAG, you will need to create an openai api key, create a .env file, and store it as OPENAI_API_KEY=XXXXX
+
+Finally, everything is setup! Now you can run 
+
+```
+python app.py
+```
+
+and view the dashboard at http://0.0.0.0:8050/
+
 Below is an overview of each analysis type and the techniques used.
 
 ---
@@ -103,3 +148,5 @@ Retrieval Augmented Generation (RAG) integrates the strengths of traditional ret
 ---
 
 This dashboard app is a powerful tool for researchers, analysts, and community managers interested in understanding trends, sentiment, topics, and complex query responses within the BabyCenter data. By combining multiple NLP techniques and advanced visualization methods, the application provides a comprehensive and user-friendly interface for deep data analysis.
+
+
