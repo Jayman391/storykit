@@ -59,6 +59,18 @@ topic = dbc.Card(
                     color="secondary",
                 )
             ]),
+
+            dbc.Row([
+                dcc.Graph(
+                    id='tot-graph',
+                    config={'displayModeBar': False}
+                ),
+                dbc.Button(
+                    "Download Topics over Time", 
+                    id="download-tot-button", 
+                    color="secondary",
+                )
+            ]),
         ]),
     ],
     style=card_style,

@@ -24,7 +24,7 @@ import shifterator as sh
 
 from babycenterdb.results import Results
 
-from frontend.query import form
+from frontend.query import queryform
 from backend.query import build_query
 
 from frontend.stats import stats
@@ -40,7 +40,9 @@ from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
 
 from frontend.topic import topic
-from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap
+from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap, visualize_topics_over_time
+
+from frontend.config import configforms
 
 from datetime import datetime
 
@@ -75,7 +77,7 @@ app.layout = html.Div([
 
     dbc.Container([
         dbc.Row([
-            dbc.Col(form, width=3),
+            dbc.Col([queryform, configforms], width=3),
             dbc.Col(
                 dbc.Accordion(
                     [   
@@ -99,28 +101,22 @@ app.layout = html.Div([
     dcc.Download(id="download-documents"),
     dcc.Download(id="download-hierarchy"),
     dcc.Download(id="download-heatmap"),
+    dcc.Download(id="topics-over-time"),
     dcc.Download(id="download-wordshift"),
-    dcc.Download(id="download-sentiment")
+    dcc.Download(id="download-sentiment"),
+    # placeholder for rag callback
+    dcc.Download(id='rag-placeholder')
 ])
 
-# Callback to control visibility of comment slider and time delta slider
-@app.callback(
-    [
-        Output("comments-slider-container", "style")
-    ],
-    [Input("post-or-comment", "value")]
-)
-def toggle_sliders(post_or_comment_value):
-    """
-    Toggle visibility of 'time-delta-slider-container' and 'comments-slider-container'
-    based on the selected values in 'post-or-comment' checklist.
-    """
-    # Show the comment slider if 'post' is selected
-    comments_style = {"display": "block"} if "post" in post_or_comment_value else {"display": "none"}
 
-    # Show the time delta slider if 'comment' is selected
-
-    return [comments_style]
+def format_date(date_str):
+    # Parse the input date string
+    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+    
+    # Format the date to the desired format
+    formatted_date = date_obj.strftime("%a, %d %b %Y 00:00:00")
+    
+    return formatted_date
 
 @app.callback(
     Output("raw-docs", "data"),
@@ -160,22 +156,45 @@ def generate_query(n_clicks,
     # Build and run the query
     results = build_query(params)
 
-    # Convert results to a dataframe if needed; or directly
-    raw_docs_updated = results 
-
-    print(raw_docs_updated)
-
     # Initialize or update the RAG pipeline with new documents
-    initialize_global_rag(raw_docs_updated['text'].tolist())
-
     return Serverside(results.to_dict('records'))
+
+
+@app.callback(
+        Output('rag-placeholder', 'data'),
+        Input("raw-docs", "data")
+)
+def init_rag(docs):
+    initialize_global_rag(pd.DataFrame.from_dict(docs)['text'].tolist())
+
+    return docs
+
+
+@app.callback(
+    Output("document-stats", "data"),
+    Input("raw-docs", "data")
+)
+def update_document_stats(data):
+    """
+    Update the document stats table with the query results.
+    """
+    if data is None:
+        return []
+    
+    df = pd.DataFrame.from_records(data)
+    stats = compute_statistics(df)
+    
+    return stats
 
 # Callback to update the ngram table
 @app.callback(
     Output("ngram-data", "data"),
-    Input("raw-docs", "data")
+    Input("submit-ngram-config", "n_clicks"),
+    State("gram-radio", "value"),
+    State("raw-docs", "data")
 )
-def update_ngram_data(data):
+def update_ngram_data(n_clicks, n_grams, data):
+
     """
     Update the ngram table with the query results.
     """
@@ -184,22 +203,141 @@ def update_ngram_data(data):
     else:
         df = pd.DataFrame.from_records(data)[['text', 'date']]
         records = df.to_dict('records')
-        ngrams = compute_ngrams(records, {'keywords': ['all']})
+        ngrams = compute_ngrams(records, {'n': n_grams})
         return Serverside(ngrams)
+@app.callback(
+    Output("ngram-table", "data"),
+    Input("ngram-data", "data")
+)
+def update_ngram_table(data):
+    """
+    Update the ngram table with the query results.
+    """
+    if data is None:
+        return []
+    
+    full_corpus = data.get('full_corpus', {})
+    
+    table_data = []
+    # full_corpus has structure: {"1-gram": {counts: {...}, ranks: {...}}, "2-gram": {...}, ...}
+    for ngram_size, info_dict in full_corpus.items():
+        counts_dict = info_dict.get('counts', {})
+        ranks_dict  = info_dict.get('ranks', {})
+        
+        for ngram_text, count_val in counts_dict.items():
+            rank_val = ranks_dict.get(ngram_text, None)
+            # Create a row for the DataTable
+            row = { 
+                'ngram': ngram_text,   
+                'counts': count_val,   
+                'ranks': rank_val      
+            }
+            table_data.append(row)
+    
+    # Sort or manipulate as needed
+    # For instance, you might want to sort the table by descending counts:
+    table_data = sorted(table_data, key=lambda x: x['counts'], reverse=True)
+    
+    return table_data   
 
+@app.callback(
+    Output("ngram-plot", "figure"),
+    [
+        Input("ngram-data", "data"),
+        Input("ngram-table", "data"),         # The full table data
+        Input("ngram-table", "selected_rows") # Which rows are selected
+    ],
+        State("smoothing-slider", "value"),
+)
+def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
+    """
+    Update the ngram plot with the time series of RANKS for each selected ngram.
+    The user can hide/deselect each trace by clicking it in the legend.
+    """
+    # If there's no ngram_data yet, return an empty figure
+    if not ngram_data:
+        return go.Figure()
+
+    dates_dict = ngram_data.get('dates', {})
+    
+    # Create a blank figure
+    fig = go.Figure()
+
+    # If nothing is selected, just show a blank figure
+    if not selected_rows:
+        fig.update_layout(
+            xaxis_title="Date",
+            yaxis_title="Rank",
+            yaxis=dict(autorange="reversed")  # Ranks: 1 is at the top
+        )
+        return fig
+    
+    # For each selected row index, grab its corresponding row data
+    for row_idx in selected_rows:
+        row_data = table_data[row_idx]
+        ngram_text = row_data['ngram']
+
+        x_vals = []
+        y_vals = []
+
+        # Sort dates so lines go from earliest to latest
+        sorted_dates = list(dates_dict.keys())
+        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
+
+        # For each date, see if that ngram appears and gather its rank
+        for date_str in sorted_dates:
+            # date_str => something like "Mon, 20 Apr 2020 00:00:00"
+            # date_obj => {"1-gram": {...}, "2-gram": {...}, ...}
+            date_obj = dates_dict[date_str]
+
+            # We don't know which n-gram size the user clicked, so search them all
+            found = False
+            for ngram_size, size_info in date_obj.items():
+                rank_dict = size_info.get('ranks', {})
+                if ngram_text in rank_dict:
+                    x_vals.append(date_str)
+                    y_vals.append(rank_dict[ngram_text])
+                    found = True
+                    break
+            # If the ngram wasn't found for a given date, it's simply not plotted for that date
+
+        # Smooth the data using a rolling average
+        y_vals = np.round(np.convolve(y_vals, np.ones(smoothing_window) / smoothing_window, mode='same'))
+        # Add a new Scatter trace for this ngram
+        fig.add_trace(
+            go.Scatter(
+                x=x_vals, 
+                y=y_vals, 
+                dx=1,
+                dy=1,
+                mode='lines+markers',
+                name=ngram_text
+            )
+        )
+
+    # Invert y-axis so rank #1 is at the top
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Rank",
+        yaxis=dict(autorange="reversed")
+    )
+
+    return fig
 # Callback to store sentiments separately
 @app.callback(
     Output("sentiments-data", "data"),
-    Input("ngram-data", "data")
+    Input("submit-sentiment-config", "n_clicks"),
+    State("ngram-data", "data"),
+    State("window-slider", "value")
 )
-def update_sentiments(data):
+def update_sentiments(clicks, data, smoothing):
     """
     Compute and store sentiments based on ngram data.
     """
     if not data:
         return {}
     else:
-        sentiments = make_daily_sentiments_parallel(data.get('dates', {}))
+        sentiments = make_daily_sentiments_parallel(data.get('dates', {}), smoothing)
         return sentiments
 
 # Callback to update the sentiment plot with chronological dates
@@ -317,11 +455,23 @@ def update_rag_response(n_clicks, question):
         Output("topic-document-graph", "figure"),
         Output("topic-hierarchy-graph", "figure"),
         Output("heatmap-graph", "figure"),
+        Output("tot-graph", "figure"),
         Output("topics", "data"),
     ],
-    Input("raw-docs", "data")
+    Input("submit-topic-config", "n_clicks"),
+    State("embedding-model", "value"),
+    State("quantize-radio", "value"),
+    State("dimred-radio", "value"),
+    State("dimred-dims", "value"),
+    State("cluster-radio", "value"),
+    State("num-clusters", "value"),
+    State("min-cluster-size", "value"),
+    State("min-samples", "value"),
+    State("cluster-metric", "value"),
+    State("dimred-metric", "value"),
+    State("raw-docs", "data")
 )
-def topic_model(data):
+def topic_model(n_clicks, modelname, quantize, dimredradio, dimreddims, clusterradio, n_clusters, min_cluster_size, min_samples, cluster_metric,dimred_metric, data):
     """
     Fit a topic model and return the visualizations.
     """
@@ -335,158 +485,36 @@ def topic_model(data):
         raise dash.exceptions.PreventUpdate
 
     docs = df['text'].tolist()
-    
+    dates = None
+
     # If your data includes a "date" column, you can optionally parse it:
     if 'date' in df:
-        dates = df['date'].tolist()
-        try:
-            dates = [datetime.strptime(x, "%Y-%m-%dT%H:%M:%S") for x in dates]
-        except Exception as e:
-            print("Date parsing error:", e)
-            dates = None
+        dates = df['date'].astype(str).tolist()
+        datetimes = []
+        for date in dates:
+            try:
+                datetimes.append(datetime.strptime(date, "%Y-%m-%dT%H:%M:%S"))
+            except ValueError:
+                try:
+                    datetimes.append(datetime.strptime(date, "%Y-%m-%d"))
+                except ValueError:
+                    datetimes.append(None)
+      
 
     # Fit the topic model on the documents
-    topic_model_obj, _, _ = fit_topic_model(docs)
+    topic_model_obj, _, _ = fit_topic_model(docs, modelname=modelname, dimredparams={'dimred_radio': dimredradio, 'dimred_dims': dimreddims,'dimred_metric':dimred_metric}, clusterparams={'cluster_radio': clusterradio, 'n_clusters': n_clusters, 'min_cluster_size': min_cluster_size, 'min_samples': min_samples, 'cluster_metric': cluster_metric}, quantize=quantize)
     
     # Generate the visualizations
     fig_documents = visualize_documents(topic_model_obj, docs)
     fig_hierarchy = visualize_hierarchy(topic_model_obj)
     fig_heatmap = visualize_heatmap(topic_model_obj)
-
+    fig_tot = visualize_topics_over_time(topic_model_obj, docs, dates)
     # Retrieve topics (e.g., a list of topic IDs)
     topics = topic_model_obj.topics_
 
-    return fig_documents, fig_hierarchy, fig_heatmap, topics
+    return fig_documents, fig_hierarchy, fig_heatmap, fig_tot, topics
 
-@app.callback(
-    Output("ngram-table", "data"),
-    Input("ngram-data", "data")
-)
-def update_ngram_table(data):
-    """
-    Update the ngram table with the query results.
-    """
-    if data is None:
-        return []
-    
-    full_corpus = data.get('full_corpus', {})
-    
-    table_data = []
-    # full_corpus has structure: {"1-gram": {counts: {...}, ranks: {...}}, "2-gram": {...}, ...}
-    for ngram_size, info_dict in full_corpus.items():
-        counts_dict = info_dict.get('counts', {})
-        ranks_dict  = info_dict.get('ranks', {})
-        
-        for ngram_text, count_val in counts_dict.items():
-            rank_val = ranks_dict.get(ngram_text, None)
-            # Create a row for the DataTable
-            row = { 
-                'ngram': ngram_text,   
-                'counts': count_val,   
-                'ranks': rank_val      
-            }
-            table_data.append(row)
-    
-    # Sort or manipulate as needed
-    # For instance, you might want to sort the table by descending counts:
-    table_data = sorted(table_data, key=lambda x: x['counts'], reverse=True)
-    
-    return table_data   
 
-@app.callback(
-    Output("ngram-plot", "figure"),
-    [
-        Input("ngram-data", "data"),
-        Input("ngram-table", "data"),         # The full table data
-        Input("ngram-table", "selected_rows") # Which rows are selected
-    ]
-)
-def update_ngram_plot(ngram_data, table_data, selected_rows):
-    """
-    Update the ngram plot with the time series of RANKS for each selected ngram.
-    The user can hide/deselect each trace by clicking it in the legend.
-    """
-    # If there's no ngram_data yet, return an empty figure
-    if not ngram_data:
-        return go.Figure()
-
-    dates_dict = ngram_data.get('dates', {})
-    
-    # Create a blank figure
-    fig = go.Figure()
-
-    # If nothing is selected, just show a blank figure
-    if not selected_rows:
-        fig.update_layout(
-            xaxis_title="Date",
-            yaxis_title="Rank",
-            yaxis=dict(autorange="reversed")  # Ranks: 1 is at the top
-        )
-        return fig
-    
-    # For each selected row index, grab its corresponding row data
-    for row_idx in selected_rows:
-        row_data = table_data[row_idx]
-        ngram_text = row_data['ngram']
-
-        x_vals = []
-        y_vals = []
-
-        # Sort dates so lines go from earliest to latest
-        sorted_dates = list(dates_dict.keys())
-        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
-
-        # For each date, see if that ngram appears and gather its rank
-        for date_str in sorted_dates:
-            # date_str => something like "Mon, 20 Apr 2020 00:00:00"
-            # date_obj => {"1-gram": {...}, "2-gram": {...}, ...}
-            date_obj = dates_dict[date_str]
-
-            # We don't know which n-gram size the user clicked, so search them all
-            found = False
-            for ngram_size, size_info in date_obj.items():
-                rank_dict = size_info.get('ranks', {})
-                if ngram_text in rank_dict:
-                    x_vals.append(date_str)
-                    y_vals.append(rank_dict[ngram_text])
-                    found = True
-                    break
-            # If the ngram wasn't found for a given date, it's simply not plotted for that date
-
-        # Add a new Scatter trace for this ngram
-        fig.add_trace(
-            go.Scatter(
-                x=x_vals, 
-                y=y_vals, 
-                mode='lines+markers',
-                name=ngram_text
-            )
-        )
-
-    # Invert y-axis so rank #1 is at the top
-    fig.update_layout(
-        xaxis_title="Date",
-        yaxis_title="Rank",
-        yaxis=dict(autorange="reversed")
-    )
-
-    return fig
-
-@app.callback(
-    Output("document-stats", "data"),
-    Input("raw-docs", "data")
-)
-def update_document_stats(data):
-    """
-    Update the document stats table with the query results.
-    """
-    if data is None:
-        return []
-    
-    df = pd.DataFrame.from_records(data)
-    stats = compute_statistics(df)
-    
-    return stats
 
 # ======================
 # DOWNLOAD CALLBACKS
@@ -582,6 +610,22 @@ def download_heatmap(n_clicks, figure):
     buf.seek(0)
     return dcc.send_bytes(buf.getvalue(), "heatmap.svg")
 
+@app.callback(
+    Output("topics-over-time", "data"),
+    Input("download-tot-button", "n_clicks"),
+    State("tot-graph", "figure"),
+    prevent_initial_call=True
+)
+def download_topics_over_time(n_clicks, figure):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    fig = go.Figure(figure)
+    buf = BytesIO()
+    fig.write_image(buf, format="svg")
+    buf.seek(0)
+    return dcc.send_bytes(buf.getvalue(), "topics_over_time.svg")
+
+
 
 # 6. Download the Wordshift plot
 @app.callback(
@@ -629,14 +673,42 @@ def download_sentiment_timeseries(n_clicks, figure):
     buf.seek(0)
     return dcc.send_bytes(buf.getvalue(), "sentiment_timeseries.svg")
 
-def format_date(date_str):
-    # Parse the input date string
-    date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-    
-    # Format the date to the desired format
-    formatted_date = date_obj.strftime("%a, %d %b %Y 00:00:00")
-    
-    return formatted_date
+
+### Dynamic Config Form Callbacks
+
+
+# ------------------------
+# CALLBACKS FOR DYNAMIC RENDERING
+# ------------------------
+
+# Toggle the UMAP metric dropdown container based on the selected dimensionality reduction technique.
+@app.callback(
+    Output('umap-container', 'style'),
+    Input('dimred-radio', 'value')
+)
+def toggle_umap_metric(selected_dimred):
+    if selected_dimred == 'UMAP':
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+# Toggle the clustering configuration components:
+# - Show the "numclusters" container only for KMeans and Spectral Clustering.
+# - Show the HDBSCAN hyperparameters only when HDBSCAN is selected.
+@app.callback(
+    [Output('numclusters-container', 'style'),
+     Output('hdbscan-container', 'style')],
+    Input('cluster-radio', 'value')
+)
+def toggle_clustering_options(selected_cluster):
+    if selected_cluster in ['KMeans', 'Spectral']:
+         return {'display': 'block'}, {'display': 'none'}
+    elif selected_cluster == 'HDBSCAN':
+         return {'display': 'none'}, {'display': 'block'}
+    else:
+         return {'display': 'none'}, {'display': 'none'}
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False, host='0.0.0.0')
+
