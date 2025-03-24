@@ -34,6 +34,7 @@ ngram = dbc.Card(
                             'fontWeight': 'bold'
                         },
                         export_format="csv",
+                        filter_action='native',
                     ),
                     width=4
                 ),

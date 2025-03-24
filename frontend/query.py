@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 import pandas as pd
 
+# Define a common card style
 card_style = {
     'padding': '15px',
     'marginBottom': '20px',
@@ -14,6 +15,7 @@ card_style = {
     'margin': 'auto'
 }
 
+# --- Input Components ---
 date_range_slider = html.Div(
     [
         dbc.Label("Date Range", html_for="date-range"),
@@ -105,54 +107,31 @@ post_or_comment_checkbox = html.Div(
     className="mb-3",
 )
 
-form = dbc.Card(
-    dbc.CardBody(
-        dbc.Form(
-            [
-                dbc.Row(
-                    dbc.Col(date_range_slider, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(comments_slider, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(post_or_comment_checkbox, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(ngram_input, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(group_input, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(num_documents, width=12),
-                    className="mb-3",
-                ),
-                dbc.Row(
-                    dbc.Col(
-                        [
-                            dbc.Button(
-                                "Submit Query", 
-                                id="submit-query-button", 
-                                color="primary",
-                                className="me-2",
-                            ), 
-                            dbc.Button(
-                                "Download Documents", 
-                                id="download-query-button", 
-                                color="secondary",
-                            )
-                        ],
+# --- Main Query Form Card ---
+queryform = dbc.Card(
+    [
+        dbc.CardHeader("Query Configuration"),
+        dbc.CardBody(
+            dbc.Form(
+                [
+                    dbc.Row(dbc.Col(date_range_slider, width=12), className="mb-3"),
+                    dbc.Row(dbc.Col(comments_slider, width=12), className="mb-3"),
+                    dbc.Row(dbc.Col(post_or_comment_checkbox, width=12), className="mb-3"),
+                    dbc.Row(dbc.Col(ngram_input, width=12), className="mb-3"),
+                    dbc.Row(dbc.Col(group_input, width=12), className="mb-3"),
+                    dbc.Row(dbc.Col(num_documents, width=12), className="mb-3"),
+                    dbc.Row(
+                        dbc.Col(
+                            [
+                                dbc.Button("Submit Query", id="submit-query-button", color="primary", className="me-2"),
+                                dbc.Button("Download Documents", id="download-query-button", color="secondary"),
+                            ]
+                        ),
+                        className="mb-3",
                     ),
-                    className="mb-3",
-                ),
-            ]
-        )
-    ),
+                ]
+            )
+        ),
+    ],
     style=card_style
 )
