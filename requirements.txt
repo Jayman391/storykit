@@ -1,8 +1,3 @@
-anaconda-anon-usage
-anaconda-catalogs
-anaconda-cloud-auth
-anaconda-navigator
-anaconda-project
 appdirs
 astropy
 autopep8
