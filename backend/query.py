@@ -35,9 +35,9 @@ def build_query(params : dict) -> pd.DataFrame:
     posts_query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
     comments_query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
 
-    posts_df = posts_query.documents
+    posts_df = pd.DataFrame(posts_query.documents)
     posts_df['type'] = 'post'
-    comments_df = comments_query.documents
+    comments_df = pd.DataFrame(comments_query.documents)
     comments_df['type'] = 'comment'
 
     # Concatenate DataFrames
@@ -50,14 +50,14 @@ def build_query(params : dict) -> pd.DataFrame:
   if params['post_or_comment'][0] == 'post':
     print("made it here")
     query = Query('posts', post_filters, output_format="df", limit=params['num_documents']).execute()
-    df = query.documents
+    df = pd.DataFrame(query.documents)
     df['type'] = 'post'
     if '_id' in df.columns:
         df['_id'] = df['_id'].astype(str) 
     return df
   if params['post_or_comment'][0] == 'comment':
     query = Query('comments', comment_filters, output_format="df", limit=params['num_documents']).execute()
-    df = query.documents
+    df = pd.DataFrame(query.documents)
     df['type'] = 'comment'
     if '_id' in df.columns:
         df['_id'] = df['_id'].astype(str)
