@@ -8,9 +8,6 @@ bottleneck
 brotli
 bs4
 colorama
-conda-build
-conda-repo-cli
-conda-token
 dash
 dash-bootstrap-components
 dash-extensions
@@ -57,7 +54,6 @@ pyodbc
 pysocks
 pywavelets
 rope
-ruamel-yaml-conda
 s3fs
 scikit-image
 scrapy
