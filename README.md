@@ -34,6 +34,7 @@ python3.11 -m venv venv
 source venv/bin/activate
 pip install ../<path to BabyCenterDB package>/babycenterdb/dist/babycenterdb-0.1.0-py3-none-any.whl
 pip install -r requirements.txt
+python -m spacy download en_core_web_sm
 ```
 
 Finally, we need to modify the shifterator packages source code to work with python 3.11 

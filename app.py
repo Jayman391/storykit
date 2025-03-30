@@ -1,31 +1,29 @@
-# app.py
 
-import numpy as np
+from io import BytesIO
+import base64
+from datetime import datetime
+
 import pandas as pd
-import dash
-from dash import Dash, html, dash_table, dcc
-from dash.dependencies import Input, Output, State
-import dash_bootstrap_components as dbc
+
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
-from flask_caching import Cache
+
+import dash
+from dash import html, dcc
+from dash.dependencies import Input, Output, State
+import dash_bootstrap_components as dbc
+from dash_extensions.enrich import DashProxy, Output, Input, State, Serverside, html, dcc, ServersideOutputTransform
 
 import matplotlib  # pip install matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
-import json
-from io import BytesIO
-import base64
-
-from collections import defaultdict
-import shifterator as sh
-
-from babycenterdb.results import Results
+import networkx as nx
 
 from frontend.query import queryform
 from backend.query import build_query
+
+from frontend.config import configforms
 
 from frontend.stats import stats
 from backend.stats import compute_statistics
@@ -42,11 +40,9 @@ from backend.chatbot import initialize_global_rag, compute_rag
 from frontend.topic import topic
 from backend.topic import fit_topic_model, visualize_documents, visualize_hierarchy, visualize_heatmap, visualize_topics_over_time
 
-from frontend.config import configforms
+from frontend.kg import kg
+from backend.kg import create_knowledge_graph
 
-from datetime import datetime
-
-from dash_extensions.enrich import DashProxy, Output, Input, State, Serverside, html, dcc, ServersideOutputTransform
 
 # Initialize the app
 app = DashProxy(
@@ -85,6 +81,7 @@ app.layout = html.Div([
                         dbc.AccordionItem(ngram, title="Ngram Analysis"),
                         dbc.AccordionItem(wordshift, title="Sentiment Analysis"),
                         dbc.AccordionItem(topic, title="Topic Modeling"),
+                        dbc.AccordionItem(kg, title="Knowledge Graph"),
                         dbc.AccordionItem(chatbot, title="RAG Chatbot"),
                     ],
                     start_collapsed=True,
@@ -298,7 +295,7 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
         # Smooth the data using a rolling average that handles missing values
         y_series = pd.Series(y_vals, dtype=float)
         y_smoothed = y_series.rolling(window=smoothing_window, min_periods=1, center=True).mean().round().tolist()
-        
+
         # Add the trace with the full date list as x–axis
         fig.add_trace(
             go.Scatter(
@@ -508,6 +505,90 @@ def topic_model(n_clicks, modelname, quantize, dimredradio, dimreddims, clusterr
     topics = topic_model_obj.topics_
 
     return fig_documents, fig_hierarchy, fig_heatmap, fig_tot, topics
+
+
+@app.callback(
+    Output("knowledge-graph", "figure"),
+    Input("raw-docs", "data")
+)
+def knowledge_graph(data):
+    # Create NetworkX graph
+    G = create_knowledge_graph(pd.DataFrame.from_records(data)['text'].tolist())
+
+    # remove isolates
+    G.remove_nodes_from(list(nx.isolates(G)))
+
+    # remove nodes with degree 2
+    # nodes_to_remove = [node for node, degree in dict(G.degree()).items() if degree == 2]
+    # G.remove_nodes_from(nodes_to_remove)
+
+    # Layout for nodes
+    pos = nx.layout.spring_layout(G, k=len(G.nodes())/100)
+
+    # Edge traces
+    edge_x = []
+    edge_y = []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=0.5, color='#888'),
+        hoverinfo='none',
+        mode='lines'
+    )
+
+    # Node traces
+    node_x = []
+    node_y = []
+    node_text = []
+    node_adjacencies = []
+
+    for node in G.nodes():
+        x, y = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        num_connections = len(list(G.adj[node]))
+        node_adjacencies.append(num_connections)
+        # add text to node
+        node_text.append(G.nodes[node]['label'])
+
+
+    node_trace = go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers',
+        hoverinfo='text',  # fixed here
+        marker=dict(
+            showscale=True,
+            colorscale='YlGnBu',
+            reversescale=True,
+            size=5,
+            color=node_adjacencies,
+            colorbar=dict(
+                thickness=15,
+                title='Node Connections',
+                xanchor='left',
+                titleside='right'
+            ),
+            line_width=1
+        ),
+        text=node_text
+    )
+
+    # Plotly figure
+    fig = go.Figure(data=[edge_trace, node_trace],
+                    layout=go.Layout(
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=20, l=5, r=5, t=40),
+                        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+                    ))
+
+    return fig
 
 
 
