@@ -12,8 +12,63 @@ card_style = {
     'backgroundColor': '#ffffff'
 }
 
+gramradio = dbc.Col(
+    [
+        dbc.Label('Select N-gram'),
+        dbc.RadioItems(
+            id='gram-radio',
+            options=[
+                {'label': '1-gram', 'value': 1},
+                {'label': '2-gram', 'value': 2},
+                {'label': '3-gram', 'value': 3}
+            ],
+            value=1,
+            inline=True
+        ),
+    ],
+    className="mb-3"
+)
+
+smoothingslider = dbc.Col(
+    [ 
+        dbc.Label('Ngram Smoothing Window (number of days)'),
+        dcc.Slider(
+            id='smoothing-slider',
+            min=1,
+            max=20,
+            value=1,
+            step=1,
+            marks={1:'1',20:'20'},
+            tooltip={'placement': 'bottom', 'always_visible': True}
+        )
+    ],
+    className="mb-3"
+)
+
+ngramform = dbc.Card(
+    [
+        dbc.CardHeader("Ngram Analysis"),
+        dbc.CardBody(
+            dbc.Form(
+                [
+                    dbc.Row([gramradio, smoothingslider]),
+                    dbc.Row(
+                        dbc.Col(
+                            dbc.Button("Submit", id="submit-ngram-config", color="primary"),
+                            className="mt-3"
+                        )
+                    ),
+                ]
+            )
+        ),
+    ],
+    style=card_style
+)
+
+
 ngram = dbc.Card(
     [
+        ngramform,
         dbc.CardHeader("Ngram Analysis"),
         dbc.CardBody(
             dbc.Row([
