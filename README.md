@@ -46,7 +46,7 @@ python monkeypatch_shifterator.py
 If you want to enable RAG, you will need to create an openai api key, and export the environment variable
 
 ```
-export OPENAI_API_KEY="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"
+export OPENAI_API_KEY="XXX"
 ```
 
 Finally, everything is setup! Now you can run 
