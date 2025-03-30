@@ -247,12 +247,13 @@ def update_ngram_table(data):
         Input("ngram-table", "data"),         # The full table data
         Input("ngram-table", "selected_rows") # Which rows are selected
     ],
-        State("smoothing-slider", "value"),
+    State("smoothing-slider", "value"),
 )
 def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
     """
     Update the ngram plot with the time series of RANKS for each selected ngram.
-    The user can hide/deselect each trace by clicking it in the legend.
+    Each trace now uses the full set of dates as x–axis values, with missing data
+    represented as gaps. This prevents misalignment when multiple rows are selected.
     """
     # If there's no ngram_data yet, return an empty figure
     if not ngram_data:
@@ -263,7 +264,7 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
     # Create a blank figure
     fig = go.Figure()
 
-    # If nothing is selected, just show a blank figure
+    # If nothing is selected, just show a blank figure layout
     if not selected_rows:
         fig.update_layout(
             xaxis_title="Date",
@@ -271,45 +272,38 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
             yaxis=dict(autorange="reversed")  # Ranks: 1 is at the top
         )
         return fig
-    
-    # For each selected row index, grab its corresponding row data
+
+    # Compute the common, sorted list of dates once
+    sorted_dates = list(dates_dict.keys())
+    sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
+
+    # For each selected row index, build its trace using the full set of dates
     for row_idx in selected_rows:
         row_data = table_data[row_idx]
         ngram_text = row_data['ngram']
 
-        x_vals = []
         y_vals = []
-
-        # Sort dates so lines go from earliest to latest
-        sorted_dates = list(dates_dict.keys())
-        sorted_dates.sort(key=lambda x: datetime.strptime(x, "%a, %d %b %Y 00:00:00"))
-
-        # For each date, see if that ngram appears and gather its rank
+        # For each date in the full timeline, grab the rank or assign None
         for date_str in sorted_dates:
-            # date_str => something like "Mon, 20 Apr 2020 00:00:00"
-            # date_obj => {"1-gram": {...}, "2-gram": {...}, ...}
             date_obj = dates_dict[date_str]
-
-            # We don't know which n-gram size the user clicked, so search them all
-            found = False
+            rank_value = 999
+            # Look in all n-gram sizes
             for ngram_size, size_info in date_obj.items():
                 rank_dict = size_info.get('ranks', {})
                 if ngram_text in rank_dict:
-                    x_vals.append(date_str)
-                    y_vals.append(rank_dict[ngram_text])
-                    found = True
+                    rank_value = rank_dict[ngram_text]
                     break
-            # If the ngram wasn't found for a given date, it's simply not plotted for that date
+            y_vals.append(rank_value)
 
-        # Smooth the data using a rolling average
-        y_vals = np.round(np.convolve(y_vals, np.ones(smoothing_window) / smoothing_window, mode='same'))
-        # Add a new Scatter trace for this ngram
+        # Smooth the data using a rolling average that handles missing values
+        y_series = pd.Series(y_vals, dtype=float)
+        y_smoothed = y_series.rolling(window=smoothing_window, min_periods=1, center=True).mean().round().tolist()
+        
+        # Add the trace with the full date list as x–axis
         fig.add_trace(
             go.Scatter(
-                x=x_vals, 
-                y=y_vals, 
-                dx=1,
-                dy=1,
+                x=sorted_dates, 
+                y=y_smoothed, 
                 mode='lines+markers',
                 name=ngram_text
             )
@@ -323,6 +317,7 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
     )
 
     return fig
+
 # Callback to store sentiments separately
 @app.callback(
     Output("sentiments-data", "data"),
@@ -351,7 +346,7 @@ def update_sentiment_plot(data):
     else:
         # Convert the dictionary to a DataFrame
         df = pd.DataFrame.from_dict(data, orient='index', columns=['sentiment'])
-        df.index = pd.to_datetime(df.index)
+        df.index = pd.to_datetime(df.index, format="mixed")
         df = df.sort_index()  # Ensure chronological order
          # Create a line plot with interactive selection
         fig = px.line(df, x=df.index, y='sentiment', title='Daily Sentiment')
@@ -710,5 +705,5 @@ def toggle_clustering_options(selected_cluster):
          return {'display': 'none'}, {'display': 'none'}
 
 if __name__ == "__main__":
-    app.run_server(debug=False, host='0.0.0.0')
+    app.run_server(debug=True, host='0.0.0.0')
 

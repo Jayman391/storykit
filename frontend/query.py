@@ -22,7 +22,7 @@ date_range_slider = html.Div(
         dcc.DatePickerRange(
             id="date-range",
             min_date_allowed="2010-01-01",
-            max_date_allowed="2022-12-31",
+            max_date_allowed="2024-12-31",
             start_date="2019-01-01",
             end_date="2021-01-01",
         ),

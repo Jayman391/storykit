@@ -1,16 +1,14 @@
 # backend/chatbot.py
 
 from langchain import hub
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+import os
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.vectorstores import InMemoryVectorStore
 from langgraph.graph import START, StateGraph
 from typing_extensions import List, TypedDict
-
-import dotenv
-
-dotenv.load_dotenv()
 
 # Define state for applications
 class StateType(TypedDict):
@@ -34,8 +32,8 @@ class RAGPipeline:
         """
         Initialize RAG components: LLM, embeddings, vector store, and prompt.
         """
-        llm = ChatOpenAI(model="gpt-4o-mini")
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        llm = ChatOpenAI(model="gpt-4o-mini", api_key="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")
+        embeddings = HuggingFaceEmbeddings()
         self.vector_store = InMemoryVectorStore(embeddings)
 
         documents = [Document(page_content=doc) for doc in docs]
