@@ -11,8 +11,58 @@ card_style = {
     'backgroundColor': '#ffffff'
 }
 
-kg = dbc.Card(
+kgform = dbc.Card(
     [
+        dbc.CardHeader("Knowledge Graph"),
+        dbc.CardBody(
+            dbc.Form(
+                [   
+                    dbc.Row(
+                        [
+                            dbc.Label('Select Entities for NER Extraction'),
+                            dcc.Dropdown(
+                                id='ner-entities',
+                                options=[
+                                    {'label': 'PERSON', 'value': 'PERSON'},
+                                    {'label': 'NORP', 'value': 'NORP'},
+                                    {'label': 'FAC', 'value': 'FAC'},
+                                    {'label': 'ORG', 'value': 'ORG'},
+                                    {'label': 'GPE', 'value': 'GPE'},
+                                    {'label': 'LOC', 'value': 'LOC'},
+                                    {'label': 'PRODUCT', 'value': 'PRODUCT'},
+                                    {'label': 'EVENT', 'value': 'EVENT'},
+                                    {'label': 'WORK_OF_ART', 'value': 'WORK_OF_ART'},
+                                    {'label': 'LAW', 'value': 'LAW'},
+                                    {'label': 'LANGUAGE', 'value': 'LANGUAGE'},
+                                    {'label': 'DATE', 'value': 'DATE'},
+                                    {'label': 'TIME', 'value': 'TIME'},
+                                    {'label': 'PERCENT', 'value': 'PERCENT'},
+                                    {'label': 'MONEY', 'value': 'MONEY'},
+                                    {'label': 'QUANTITY', 'value': 'QUANTITY'},
+                                    {'label': 'ORDINAL', 'value': 'ORDINAL'},
+                                    {'label': 'CARDINAL', 'value': 'CARDINAL'}
+                                ],
+                                value=['GPE'],
+                                multi=True
+                            )
+                        ]
+                    ),
+                    dbc.Row(
+                        dbc.Col(
+                            dbc.Button("Submit", id="submit-kg-config", color="primary"),
+                            className="mt-3"
+                        )
+                    )
+                ]
+            )
+        ),
+    ],
+    style=card_style
+)
+
+kg = dbc.Card(
+    [   
+        kgform,
         dbc.CardHeader("NER Knowledge Graph"),
         dbc.CardBody([
             

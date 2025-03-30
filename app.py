@@ -23,7 +23,6 @@ import networkx as nx
 from frontend.query import queryform
 from backend.query import build_query
 
-from frontend.config import configforms
 
 from frontend.stats import stats
 from backend.stats import compute_statistics
@@ -73,11 +72,10 @@ app.layout = html.Div([
 
     dbc.Container([
         dbc.Row([
-            dbc.Col([queryform, configforms], width=3),
+            dbc.Col([queryform, stats], width=3),
             dbc.Col(
                 dbc.Accordion(
                     [   
-                        dbc.AccordionItem(stats, title="Query Statistics"),
                         dbc.AccordionItem(ngram, title="Ngram Analysis"),
                         dbc.AccordionItem(wordshift, title="Sentiment Analysis"),
                         dbc.AccordionItem(topic, title="Topic Modeling"),
@@ -181,7 +179,12 @@ def update_document_stats(data):
     df = pd.DataFrame.from_records(data)
     stats = compute_statistics(df)
     
-    return stats
+    # Convert the computed statistics into a format suitable for the DataTable
+    table_data = []
+    for stat_name, stat_value in stats.items():
+        table_data.append({"Metric": stat_name, "Value": stat_value})
+    
+    return table_data
 
 # Callback to update the ngram table
 @app.callback(
@@ -509,11 +512,15 @@ def topic_model(n_clicks, modelname, quantize, dimredradio, dimreddims, clusterr
 
 @app.callback(
     Output("knowledge-graph", "figure"),
-    Input("raw-docs", "data")
+    Input("submit-kg-config", "n_clicks"),
+    State("raw-docs", "data"),
+    State("ner-entities", "value")
 )
-def knowledge_graph(data):
+def knowledge_graph(n_clicks, data, entities):
+    if not data:
+        raise dash.exceptions.PreventUpdate
     # Create NetworkX graph
-    G = create_knowledge_graph(pd.DataFrame.from_records(data)['text'].tolist())
+    G = create_knowledge_graph(pd.DataFrame.from_records(data)['text'].tolist(), entities)
 
     # remove isolates
     G.remove_nodes_from(list(nx.isolates(G)))
@@ -786,5 +793,5 @@ def toggle_clustering_options(selected_cluster):
          return {'display': 'none'}, {'display': 'none'}
 
 if __name__ == "__main__":
-    app.run_server(debug=True, host='0.0.0.0')
+    app.run_server(debug=False, host='0.0.0.0')
 

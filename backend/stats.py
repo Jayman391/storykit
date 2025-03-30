@@ -11,10 +11,10 @@ def compute_statistics(data):
     avg_comment_length = comments['text'].str.split().apply(len).mean()
     num_unique_commenters = comments['author'].nunique()
 
-    return [{
+    return {
         'avg_post_length': avg_post_length,
         'num_unique_posters': num_unique_posters,
         'avg_num_comments': avg_num_comments,
         'avg_comment_length': avg_comment_length,
         'num_unique_commenters': num_unique_commenters
-    }]
+    }
