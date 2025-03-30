@@ -33,6 +33,7 @@ contourpy
 crashtest
 cycler
 cymem
+Cython
 dash
 dash-bootstrap-components
 dash-core-components
@@ -86,6 +87,7 @@ jaraco.context
 jaraco.functools
 Jinja2
 jiter
+jq
 jsbeautifier
 jsonpointer
 jsonschema-specifications
