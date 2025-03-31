@@ -12,9 +12,16 @@ card_style = {
 }
 
 chatbot = dbc.Card(
-    [
+    [   
         dbc.CardHeader("RAG Chatbot"),
         dbc.CardBody([
+            dbc.Button(
+                'Initialize RAG',
+                id='initialize-rag',
+                n_clicks=0,
+                color="primary",
+                className="mt-2",
+            ),
             dcc.Textarea(
                 id='question',
                 placeholder='Ask me anything about the data!',

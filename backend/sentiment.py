@@ -1,109 +1,111 @@
-from collections import defaultdict
+from io import BytesIO
+import base64
 import shifterator as sh
 import pandas as pd
 import traceback
 import numpy as np
 from multiprocessing import Pool, cpu_count
 from collections import Counter
-
-# Precompute labmt_dict as a Pandas Series for faster lookups
-labmt = pd.read_csv('data/labmt.csv')
-labmt = labmt[['Word', 'Happiness Score']]
-labmt_dict = labmt.set_index('Word')['Happiness Score']
-labmt_words = labmt_dict.index.to_numpy()
+import matplotlib.pyplot as plt
 
 
 def compute_single_day_sentiment(args):
     """
-    Helper function to compute sentiment for a single day.
+    Compute sentiment for a single day using direct dictionary lookups.
+
     Unpacked arguments:
-      day_id: the key (ID) for the day
-      day_data: the dictionary that holds 1-gram counts
-      labmt_words: NumPy array of valid words (from the labMT dictionary)
-      labmt_dict: Pandas Series for quick lookups of happiness scores
+      day_id: the key (ID) for the day.
+      day_data: the dictionary that holds 1-gram counts.
+      labmt_scores: a dictionary mapping valid words to their happiness scores.
     """
-    day_id, day_data, labmt_words, labmt_dict = args
-    
-    # Extract '1-gram' counts; default to empty dict if not present
-    day_words_dict = day_data.get('1-gram', {}).get('counts', {})
-    if not day_words_dict:
-        return day_id, None  # Skip if no words for the day
-    
-    # Convert day_words_dict to two separate NumPy arrays
-    words, counts = zip(*day_words_dict.items())
-    words = np.array(words, dtype=object)
-    counts = np.array(counts, dtype=np.float64)  # Ensure float for division
-    
-    # Create a mask for words present in labmt_dict
-    mask = np.isin(words, labmt_words)
-    if not np.any(mask):
+    day_id, day_data, labmt_scores = args
+
+    # Retrieve the 1-gram counts; if missing, skip this day.
+    day_words = day_data.get('1-gram', {}).get('counts', {})
+    if not day_words:
         return day_id, None
-    
-    # Filter words and counts
-    valid_words = words[mask]
-    valid_counts = counts[mask]
-    
-    # Retrieve corresponding happiness scores using Pandas' indexing
-    valid_scores = labmt_dict.loc[valid_words].to_numpy()
-    
-    # Calculate total counts to normalize
-    total_counts = valid_counts.sum()
+
+    total_counts = 0.0
+    weighted_sentiment = 0.0
+
+    # Iterate over words and counts, accumulating weighted scores.
+    for word, count in day_words.items():
+        score = labmt_scores.get(word)
+        if score is not None:
+            total_counts += count
+            weighted_sentiment += count * score
+
     if total_counts == 0:
         return day_id, None
-    
-    # Compute sentiment: (count / total_counts) * happiness_score
-    sentiments_array = (valid_counts / total_counts) * valid_scores
-    total_day_sentiment = sentiments_array.sum()
-    
-    return day_id, total_day_sentiment
 
-def make_daily_sentiments_parallel(days: dict, smoothing:int=1) -> dict:
+    # Return the weighted average sentiment.
+    return day_id, weighted_sentiment / total_counts
+
+def make_daily_sentiments_parallel(days: dict, labmt_dict, smoothing: int = 1) -> dict:
     """
-    A parallelized version of make_daily_sentiments. Returns a dictionary
-    of {day_id: sentiment}.
+    Compute daily sentiments in parallel. Returns a dictionary of {day_id: sentiment}.
+
+    Parameters:
+      days: A dictionary where keys are day IDs and values are day_data dictionaries.
+      labmt_dict: A Pandas Series with words as the index and happiness scores as values.
+      smoothing: The window size for smoothing sentiment values (if > 1).
     """
-    labmt_words = labmt_dict.index.to_numpy()
-    
-    # Prepare arguments for each day
-    tasks = [(day_id, day_data, labmt_words, labmt_dict)
-             for day_id, day_data in days.items()]
-    
+    # Convert the labMT Pandas Series into a dictionary for fast lookups.
+    labmt_scores = labmt_dict
+
+    # Prepare the tasks for parallel processing.
+    tasks = [(day_id, day_data, labmt_scores) for day_id, day_data in days.items()]
+
     results_dict = {}
     with Pool(processes=cpu_count()) as pool:
         for day_id, sentiment in pool.map(compute_single_day_sentiment, tasks):
             if sentiment is not None:
                 results_dict[day_id] = sentiment
 
-    # Apply smoothing
+    # If smoothing is requested, perform a simple moving average.
     if smoothing > 1:
         smoothed_results = {}
-        for idx, (day_id, sentiment) in enumerate(results_dict.items()):
-            if idx < smoothing:
-                continue
-            smoothed_sentiment = np.mean(list(results_dict.values())[idx-smoothing:idx])
-            smoothed_results[day_id] = smoothed_sentiment
+        # Convert to lists to avoid repeated conversion in the loop.
+        day_ids = list(results_dict.keys())
+        sentiments = list(results_dict.values())
+        for idx in range(smoothing, len(sentiments)):
+            smoothed_results[day_ids[idx]] = np.mean(sentiments[idx - smoothing:idx])
         return smoothed_results
-    
+
     return results_dict
 
 def compute_shift(args):
     day, day_words, window_words, total_day_sentiment = args
     try:
-        shift = sh.WeightedAvgShift(
+        fig, axs = plt.subplots(1, 1, figsize=(10, 20))
+
+        sh.WeightedAvgShift(
             type2freq_1=day_words,
             type2freq_2=window_words,
             type2score_1='labMT_English',
             type2score_2='labMT_English',
             reference_value=total_day_sentiment,
             handle_missing_scores='exclude'
-        ).get_shift_graph()
-        return shift
+        ).get_shift_graph(axs)
+
+        fig.tight_layout()
+        # Convert plot to base64 image
+        buf = BytesIO()
+        fig.savefig(buf, format='svg')
+        buf.seek(0)
+        encoded = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close(fig)
+
+        encodedstr = f"data:image/svg+xml;base64,{encoded}"
+
+       # Ensure valid range
+        return day, encodedstr
     except Exception as e:
         print(f"Error generating shift graph for day {day}: {e}")
         traceback.print_exc()
         return None
 
-def make_daily_wordshifts_parallel(days: dict, window: int = 2):
+def make_daily_wordshifts_parallel(days: dict, labmt_dict, window: int = 2):
     shifts = []
     daykeys = list(days.keys())
     labmt_keys = set(labmt_dict.keys())
@@ -133,7 +135,7 @@ def make_daily_wordshifts_parallel(days: dict, window: int = 2):
         day_sentiment = sum((v / day_counts) * labmt_dict[k] for k, v in day_words.items())
 
         # Update sliding window
-        if len(window_days) == window:
+        if len(window_days) == window + 1:
             # Remove the oldest day from the window
             oldest_day = window_days.pop(0)
             window_counter.subtract(filtered_days[oldest_day])
@@ -157,50 +159,3 @@ def make_daily_wordshifts_parallel(days: dict, window: int = 2):
     shifts = [shift for shift in results if shift is not None]
 
     return shifts
-
-def generate_wordshift_for_date(day, days):
-    """
-    Generate a wordshift graph for a specific day.
-    """
-    try:
-        day_data = days.get(day, {})
-        day_words = day_data.get('1-gram', {}).get('counts', {})
-        if not day_words:
-            return None
-
-        # Filter words present in labmt_dict
-        filtered_words = {k: v for k, v in day_words.items() if k in labmt_dict}
-        if not filtered_words:
-            return None
-
-        total_day_counts = sum(filtered_words.values())
-        if total_day_counts == 0:
-            return None
-
-        # Calculate sentiment
-        day_sentiment = sum((v / total_day_counts) * labmt_dict[k] for k, v in filtered_words.items())
-
-        # For wordshift, you might want to define a window or use specific comparison
-        # Here, we'll compare the day's word distribution to the overall distribution
-        overall_freq = Counter()
-        for d, data in days.items():
-            counts = data.get('1-gram', {}).get('counts', {})
-            filtered = {k: v for k, v in counts.items() if k in labmt_dict}
-            overall_freq.update(filtered)
-        overall_freq = dict(overall_freq)
-
-        shift = sh.WeightedAvgShift(
-            type2freq_1=filtered_words,
-            type2freq_2=overall_freq,
-            type2score_1='labMT_English',
-            type2score_2='labMT_English',
-            reference_value=day_sentiment,
-            handle_missing_scores='exclude'
-        ).get_shift_graph()
-
-        return shift
-
-    except Exception as e:
-        print(f"Error generating wordshift for {day}: {e}")
-        traceback.print_exc()
-        return None

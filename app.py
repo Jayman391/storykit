@@ -1,8 +1,6 @@
-
+from datetime import datetime
 from io import BytesIO
 import base64
-from datetime import datetime
-
 import pandas as pd
 
 import plotly.express as px
@@ -31,7 +29,7 @@ from frontend.ngram import ngram
 from backend.ngram import compute_ngrams
 
 from frontend.sentiment import wordshift
-from backend.sentiment import make_daily_sentiments_parallel, generate_wordshift_for_date 
+from backend.sentiment import make_daily_sentiments_parallel, make_daily_wordshifts_parallel
 
 from frontend.chatbot import chatbot
 from backend.chatbot import initialize_global_rag, compute_rag
@@ -67,6 +65,8 @@ app.layout = html.Div([
     dcc.Store(id='ngram-data', storage_type='memory'),
     dcc.Store(id='sentiments-data', storage_type='memory'),
     dcc.Store(id='topics', storage_type='memory'),
+    dcc.Store(id='stored_wordshifts', storage_type='memory'),
+    dcc.Store(id="labmt-dict", storage_type='memory'),
     # Navbar at the top
     navbar,
 
@@ -99,8 +99,6 @@ app.layout = html.Div([
     dcc.Download(id="topics-over-time"),
     dcc.Download(id="download-wordshift"),
     dcc.Download(id="download-sentiment"),
-    # placeholder for rag callback
-    dcc.Download(id='rag-placeholder')
 ])
 
 
@@ -156,10 +154,24 @@ def generate_query(n_clicks,
 
 
 @app.callback(
-        Output('rag-placeholder', 'data'),
-        Input("raw-docs", "data")
+    Output("labmt-dict", "data"),
+    Input("raw-docs", "data")
 )
-def init_rag(docs):
+def load_labmt(data):
+    # Precompute labmt_dict as a Pandas Series for faster lookups
+    labmt = pd.read_csv('data/labmt.csv')
+    labmt = labmt[['Word', 'Happiness Score']]
+    labmt_dict = labmt.set_index('Word')['Happiness Score']
+    return labmt_dict.to_dict()
+
+@app.callback(
+        Output('raw-docs', 'data', allow_duplicate=True),
+        Input("initialize-rag", "n_clicks"),
+        State("raw-docs", "data"), 
+)
+def init_rag(n_clicks,docs):
+    if not docs:
+        raise dash.exceptions.PreventUpdate 
     initialize_global_rag(pd.DataFrame.from_dict(docs)['text'].tolist())
 
     return docs
@@ -323,16 +335,18 @@ def update_ngram_plot(ngram_data, table_data, selected_rows, smoothing_window):
     Output("sentiments-data", "data"),
     Input("submit-sentiment-config", "n_clicks"),
     State("ngram-data", "data"),
-    State("window-slider", "value")
+    State("window-slider", "value"),
+    State("labmt-dict", "data"),
 )
-def update_sentiments(clicks, data, smoothing):
+def update_sentiments(clicks, data, smoothing, labmt_dict):
+
     """
     Compute and store sentiments based on ngram data.
     """
     if not data:
         return {}
     else:
-        sentiments = make_daily_sentiments_parallel(data.get('dates', {}), smoothing)
+        sentiments = make_daily_sentiments_parallel(data.get('dates', {}), labmt_dict, smoothing)
         return sentiments
 
 # Callback to update the sentiment plot with chronological dates
@@ -352,18 +366,31 @@ def update_sentiment_plot(data):
         fig = px.line(df, x=df.index, y='sentiment', title='Daily Sentiment')
         fig.update_layout(clickmode='event+select')
         return fig
+    
+@app.callback(
+    Output("stored_wordshifts", "data"),
+    Input("ngram-data", "data"),
+    State("labmt-dict", "data")
+)
+def precalculate_wordshifts(data, labmt_dict):
+    # takes in ngram data, turns into dict, and returns the wordshifts
+    if not data:
+        return {}
+    else:
+        wordshifts = make_daily_wordshifts_parallel(data.get('dates', {}), labmt_dict)
+        return wordshifts
 
 # Callback to generate and display the wordshift graph for a selected date
 @app.callback(
     Output("wordshift-container", "children"),
     Input("sentiment-plot", "clickData"),
-    State("ngram-data", "data")
+    State("stored_wordshifts", "data")
 )
-def update_wordshift_graph(clickData, ngram_data):
+def update_wordshift_graph(clickData, stored_wordshifts):
     """
     Generate the wordshift graph for the selected date and display it.
     """
-    if not clickData or not ngram_data:
+    if not clickData or not stored_wordshifts:
         return "Click on a date in the sentiment plot to see the wordshift graph."
 
     try:
@@ -372,25 +399,11 @@ def update_wordshift_graph(clickData, ngram_data):
 
         selected_date = format_date(str(selected_date))
 
-        # Generate wordshift for the selected date
-        shift = generate_wordshift_for_date(selected_date, ngram_data.get('dates', {}))
-        if shift is None:
-            return f"No wordshift data available for {selected_date}."
-
-        # Plot the wordshift graph
-        shift.plot()
-        fig = plt.gcf()
-        fig.tight_layout()
-
-        # Convert plot to base64 image
-        buf = BytesIO()
-        fig.savefig(buf, format='svg', bbox_inches='tight')
-        buf.seek(0)
-        encoded = base64.b64encode(buf.read()).decode('utf-8')
-        plt.close(fig)
-
+        # filter selected date from stored wordshifts, a tuple of (date, wordshift)
+        shift = list(filter(lambda x: x[0] == selected_date, stored_wordshifts))[0][1]
+        
         # Create the image component
-        image = html.Img(src=f"data:image/svg+xml;base64,{encoded}", style={'width': '100%'})
+        image = html.Img(src=shift, style={'width': '100%'})
 
         return image
 
@@ -710,31 +723,36 @@ def download_topics_over_time(n_clicks, figure):
 
 
 
+
 # 6. Download the Wordshift plot
 @app.callback(
     Output("download-wordshift", "data"),
     Input("download-wordshift-button", "n_clicks"),
     State("sentiment-plot", "clickData"),
-    State("ngram-data", "data"),
+    State("stored_wordshifts", "data"),
     prevent_initial_call=True
 )
-def download_wordshift(n_clicks, clickData, ngram_data):
-    if not clickData or not ngram_data:
+def download_wordshift(n_clicks, clickData, stored_wordshifts):
+    if not clickData:
         raise dash.exceptions.PreventUpdate
     try:
+        # Get the date from the clicked data and format it
         selected_date = clickData['points'][0]['x']
         selected_date = format_date(str(selected_date))
-        shift = generate_wordshift_for_date(selected_date, ngram_data.get('dates', {}))
+        
+        # Retrieve the corresponding wordshift (a tuple of (date, wordshift))
+        shift = list(filter(lambda x: x[0] == selected_date, stored_wordshifts))[0][1]
         if shift is None:
             raise dash.exceptions.PreventUpdate
-        shift.plot()
-        fig = plt.gcf()
-        fig.tight_layout()
-        buf = BytesIO()
-        fig.savefig(buf, format='svg', bbox_inches='tight')
-        buf.seek(0)
-        plt.close(fig)
-        return dcc.send_bytes(buf.getvalue(), "wordshift.svg")
+
+        # Convert the data URL string back into raw bytes
+        # The format is: "data:image/svg+xml;base64,<encoded-data>"
+        svg_base64 = shift.split(',')[1]
+        file_bytes = base64.b64decode(svg_base64)
+        
+        # Use dcc.send_bytes to trigger the download.
+        # The lambda simply returns the raw bytes.
+        return dcc.send_bytes(file_bytes, "wordshift.svg")
     except Exception as e:
         print(f"Error downloading wordshift graph: {e}")
         raise dash.exceptions.PreventUpdate
